@@ -1,9 +1,9 @@
 name: CI
 
 # Runs on every pull request targeting main.
-# All three steps (test, typecheck, build) are guarded: if the script is absent
-# from package.json the step is skipped cleanly. This template works for repos
-# that have none of these scripts as well as repos that have all three.
+# Skip-SAFE: if there is no package.json, the whole job no-ops cleanly (a repo with
+# no JS toolchain must not fail this gate). If package.json exists, test/typecheck/
+# build run only when those scripts are defined (--if-present).
 
 on:
   pull_request:
@@ -13,31 +13,36 @@ jobs:
   ci:
     name: Test, Typecheck & Build
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect package.json
+        id: pkg
+        run: |
+          if [ -f package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json — nothing to test/typecheck/build. Passing."
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.pkg.outputs.exists == 'true'
         with:
           node-version: "20"
-          cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
-
-      # --if-present silently skips the step when the script is not defined
-      # in package.json, so this template never fails a repo that has no tests.
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm ci || npm install   # ci needs a lockfile; fall back to install
 
       - name: Test
-        run: npm test --if-present -- --run
-        # --run   puts vitest into CI (non-watch) mode; jest ignores the flag.
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm test --if-present -- --run   # --run = vitest CI mode; jest ignores it
 
       - name: Typecheck
+        if: steps.pkg.outputs.exists == 'true'
         run: npm run typecheck --if-present
 
       - name: Build
+        if: steps.pkg.outputs.exists == 'true'
         run: npm run build --if-present
-        env:
-          # Placeholder so build-time SDK instantiations don't hard-fail in CI.
-          # Override in your repo's secrets if a real key is needed at build time.
-          ANTHROPIC_API_KEY: sk-ant-ci-placeholder-not-real
