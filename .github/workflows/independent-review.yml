@@ -52,7 +52,7 @@ jobs:
             echo "REVIEW_PROMPT<<__SHIPIT_REVIEW_EOF__"
             echo "Review this pull request. It was written by the Claude AI model; you are an independent reviewer from a different model family. Find what it got WRONG or MISSED — correctness bugs, security holes, data loss, broken edge cases, unhandled errors. Do not rubber-stamp and do not bikeshed style."
             echo
-            echo "IMPORTANT: the diff may be truncated and lockfiles are excluded. Review ONLY the code shown below. NEVER flag a file as missing or absent just because it is not in the diff — every file in the 'Files changed' list below IS present in the PR."
+            echo "IMPORTANT: the diff may be truncated and lockfiles are excluded. Review ONLY the code that is actually shown below. NEVER flag a file as missing just because it is not in the diff — every file in the 'Files changed' list IS present in the PR. If a file's content is truncated or not shown, do NOT speculate about possible defects in it ('may break', 'likely', 'in many such scripts') — report only concrete issues you can SEE in the visible code."
             echo
             echo "Reserve [MUST-FIX] for a CONCRETE, demonstrable defect in the changed code — a real bug, security hole, or data-loss path you can point to a specific line for. Design preferences, 'consider…' suggestions, process or CI-config opinions, and style are [NIT], NEVER [MUST-FIX]. Cite the file for each finding."
             echo "Final line, exactly once and last: 'VERDICT: MUST-FIX' only if you listed at least one genuine [MUST-FIX]; otherwise 'VERDICT: OK'."
@@ -72,7 +72,7 @@ jobs:
         uses: actions/ai-inference@b81b2afb8390ee6839b494a404766bef6493c7d9 # v1, pinned for supply-chain safety
         with:
           model: ${{ env.REVIEW_MODEL }}
-          max-completion-tokens: 1200
+          max-tokens: 1500
           system-prompt: "You are an independent, adversarial code reviewer from a different model family than the author. You did NOT write this code. Be concrete and specific; cite files. Prefer real correctness and security findings over style. Never approve code you have not actually scrutinised."
           prompt: ${{ env.REVIEW_PROMPT }}
 
