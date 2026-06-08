@@ -25,6 +25,10 @@ jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Swappable without editing — set repo variable SHIPIT_REVIEW_MODEL to track the
+      # GitHub Models catalog as it moves. Default: a strong instruction-follower.
+      REVIEW_MODEL: ${{ vars.SHIPIT_REVIEW_MODEL || 'openai/gpt-4.1' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,7 +71,7 @@ jobs:
         id: ai
         uses: actions/ai-inference@b81b2afb8390ee6839b494a404766bef6493c7d9 # v1, pinned for supply-chain safety
         with:
-          model: openai/gpt-4o
+          model: ${{ env.REVIEW_MODEL }}
           max-completion-tokens: 1200
           system-prompt: "You are an independent, adversarial code reviewer from a different model family than the author. You did NOT write this code. Be concrete and specific; cite files. Prefer real correctness and security findings over style. Never approve code you have not actually scrutinised."
           prompt: ${{ env.REVIEW_PROMPT }}
@@ -80,7 +84,7 @@ jobs:
           printf '%s\n' "$RESP" > review.md
           {
             echo "## 🔍 Independent cross-model review"
-            echo "_Reviewer: \`openai/gpt-4o\` via GitHub Models. The author (Claude) does not review its own work._"
+            echo "_Reviewer: \`$REVIEW_MODEL\` via GitHub Models. The author (Claude) does not review its own work._"
             echo
             cat review.md
           } > comment.md
