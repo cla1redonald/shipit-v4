@@ -20,6 +20,21 @@ Two capture paths, one shared core. **Model judges, code enforces.**
 | `hooks/retro-tripwire.sh` | the tripwire — free, every `Stop`, over-flags on purpose |
 | `commands/retro.md` | the `/retro` entry point (Path A and Path B) |
 
+## Gates (Phase 2 — in progress)
+
+Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:** universal cheap guards fire as **global plugin hooks** (every session, zero setup); repo-specific backstops get **installed per-repo** (CI + git hooks). See `docs/plans/2026-06-08-shipit-v4-phase2-gates.md`.
+
+| gate (`gates/`) | mechanism | proven |
+|---|---|---|
+| `no-push-to-main.sh` | global PreToolUse(Bash) — blocks pushes to main | ✅ |
+| `block-sensitive-paths.sh` | global PreToolUse(Write/Edit) — blocks `~/.ssh`, `*.pem`, … | ✅ |
+| `detect-secrets.sh` | global PostToolUse(Write/Edit) — warns on secrets | ✅ |
+| `check-docs-sync.sh` (+ `ci-templates/docs-check.yml`) | per-repo CI + commit reminder; `[no-docs]` | ✅ |
+| `pre-push-checks.sh` (+ `ci-templates/ci.yml`) | per-repo `pre-push` hook + CI; `[no-test]` | ✅ |
+| independent review | required CI check, non-Claude model via GitHub Models | ⏳ S6 |
+
+The global guards are wired in `hooks/hooks.json`. The per-repo gates are wired by the installer (`scripts/install-gates.sh`, S5).
+
 ## Routing — the rule that makes it worth doing
 
 A learning only counts if it **fires by itself next time**. Route to an auto-loading mechanism (a `CLAUDE.md` rule, an auto-loaded memory file, a hook) — never to a note nobody re-reads. That re-read failure is the V3 flaw this loop exists to fix.
