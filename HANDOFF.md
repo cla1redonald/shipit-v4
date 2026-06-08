@@ -1,66 +1,68 @@
 # HANDOFF — ShipIt V4
 
 **Date:** 2026-06-08
-**Status:** **Phase 1b (Retro v4) — DONE and proven.** Next: **Phase 2 — gates as hooks + CI.**
-Read `docs/plans/2026-06-08-shipit-v4-architecture.md` for the full plan; this handoff is the on-ramp.
+**Status:** ✅ **DONE.** Phase 1b (learning loop) **and** Phase 2 (gates) are built, proven, merged to `main`, and dogfooded. The review gate is **strict** and `main` is **branch-protected**. There is no open build work — V4 is a working product.
+
+Read `HISTORY.md` for the provenance, `docs/plans/2026-06-08-shipit-v4-architecture.md` for the founding plan, and `docs/plans/2026-06-08-shipit-v4-phase2-gates.md` for the gates plan. v1 (`~/code/ShipIt`) and v3 (`~/code/shipit-v3`) are **read-only history** — port from them, never modify.
 
 ---
 
-## Session Summary
+## What V4 is (delivered)
 
-Built **Phase 1b — the Retro v4 learning loop**, the keystone of V4. Smallest-thing-first, proven end-to-end on real learnings before adding machinery (the plan's gate).
+Two durable things the platform won't do for you, both hardened so they actually fire:
 
-**Model judges, code enforces. Enforce the process, not the verdict.** Two capture paths, one core:
-- **Path A — invoked** (`@retro` inline, or `/retro <learning>`).
-- **Path B — autonomous** — a `Stop`-hook **tripwire** (bash, no LLM, every turn, over-flags) marks candidates; the **sweep** (`/retro`, on-demand) batch-evaluates them. The expensive LLM judgment is bounded and never per-turn — the cost-safe split.
+### 1. The learning loop (Phase 1b)
+**Model judges, code enforces.** Two capture paths, one core:
+- **Path A — invoked:** `@retro` inline, or `/retro <learning>`.
+- **Path B — autonomous:** a `Stop`-hook **tripwire** (`hooks/retro-tripwire.sh`, bash, no LLM, every turn) marks candidates; the **sweep** (`/retro`) batch-evaluates them on demand (the cost-safe split).
+- **Core:** `agents/retro.md` emits a structured rubric (keep/drop · scope · type · review, rationale per axis); `scripts/route-learning.sh` *places* each keep at an auto-loading mechanism. **Hard safety:** user-scope + enforcement changes are forced to *propose*, never auto-applied.
 
-## What's built (committed `4cf927e` on branch `phase-1b-retro`)
+### 2. The gate set (Phase 2)
+v3's prose gates, now mechanism. **Global plugin hooks** (zero setup) + **per-repo installer**.
 
-| file | role |
+| gate | mechanism |
 |---|---|
-| `agents/retro.md` | the judge — structured rubric (`keep/drop · scope · type · review`), rationale per axis, verify-the-working pass |
-| `scripts/route-learning.sh` | the placer — deterministic type×scope table. **Hard safety: user-scope + enforcement forced to `propose`, never auto-applied** |
-| `hooks/retro-tripwire.sh` + `hooks.json` | Path B tripwire — every `Stop`, always exit 0, marks edits/errors/corrections |
-| `scripts/collect-candidates.sh` | sweep prep — markers → transcript slices (no LLM) |
-| `commands/retro.md` | `/retro` entry point (Path A + Path B) |
-| `commands/verify-scripts-in-sandbox.md` | a procedure the loop itself routed, then fleshed out |
-| `plugin.json` v4.0.0, `marketplace.json`, `HISTORY.md`, `CLAUDE.md` | scaffold + provenance |
+| `gates/no-push-to-main.sh` | global PreToolUse(Bash) — blocks pushes to main |
+| `gates/block-sensitive-paths.sh` | global PreToolUse(Write/Edit) — blocks `~/.ssh`, `*.pem`, … |
+| `gates/detect-secrets.sh` | global PostToolUse — warns on secrets |
+| `gates/check-docs-sync.sh` + CI | code-changed-without-docs; `[no-docs]` |
+| `gates/pre-push-checks.sh` + CI | test/typecheck/build, skip-if-absent; `[no-test]` |
+| `.github/workflows/independent-review.yml` | **per-file** cross-model review (non-Claude `gpt-4.1` via keyless GitHub Models) — the author doesn't review its own work |
+| `scripts/install-gates.sh` | idempotent per-repo installer (CI + git hooks + settings) |
+| `commands/ship.md` (`/ship`) | runs every gate on demand; hooks fire regardless |
 
-**Proven:** tripwire→markers→collect→rubric→route all exercised against sandbox repos + synthetic JSONL transcripts (read real output, not "it ran"). The retro agent ran for real, classified honestly, and routed a project rule into `CLAUDE.md` — which the harness injects at session start, so it **auto-loads next session.**
+## Enforcement state (live on the GitHub repo)
 
-## Current State
+- **Repo:** https://github.com/cla1redonald/shipit-v4 (public). `main` only — all feature branches deleted.
+- **Branch protection on `main`:** requires checks **`review` · `docs-sync` · `Test, Typecheck & Build`** + a PR (no direct push), 0 human approvals, `enforce_admins=false` (you can admin-merge).
+- **Review = STRICT:** repo var `SHIPIT_REVIEW_STRICT=true` → any `[MUST-FIX]` blocks. Model swappable via `SHIPIT_REVIEW_MODEL`.
+- **Escape hatches** (for a verified false positive): `[no-review]` in a commit message, or admin-merge.
+- **Plugin symlink:** `~/.claude/local-plugins/shipit` → `~/code/shipit-v4` (loads globally each session).
+- **Global config cleaned:** `~/.claude/CLAUDE.md` reframed to V4 (`/orchestrate` dropped); the `/shipit`-default `UserPromptSubmit` nudge retired.
 
-- **`~/code/shipit-v4`** — on branch `phase-1b-retro`, commit `4cf927e`. `main` = the founding commit only.
-- **Plugin symlink FIXED:** `~/.claude/local-plugins/shipit` → `~/code/shipit-v4` (was a dead link to `~/shipit-v2`). `/retro` + the tripwire load globally from the **next** session on (hooks load at startup).
-- **Global config cleaned this session:** `~/.claude/CLAUDE.md` ShipIt section reframed to V4 (dropped `/orchestrate`); the `/shipit`-default `UserPromptSubmit` nudge **retired** (hook wiring removed, `shipit-reminder.sh` deleted, `feedback_shipit_is_default.md` deleted; its orthogonal "fix everything properly" note re-homed to `feedback_fix_everything_properly.md`).
-- **Remote:** see below — established this session (or pending, per the push step).
-- **History (do NOT modify — the museum):** v1 `~/code/ShipIt`, v3 `~/code/shipit-v3`. Port from them, never edit.
+## How to work on V4 now
 
-## Open Issues / Next
+`main` is protected, so: **branch → PR → pass the gates → merge.** Even a docs change goes through a PR (the review gate runs on it). This HANDOFF update was itself the first real exercise of that flow.
 
-### Phase 2 — gates as hooks + CI (the next build)
-Map each v3 `/shipit` gate to a real mechanism (plan §Phase 2):
-- test / typecheck / build → CI + `pre-push` hook
-- no-push-to-main → hook + CI
-- docs-in-sync → **generalize ProveIt's `check-docs-sync.sh` + CI + PreToolUse hook + `[no-docs]`** (the reference impl)
-- security scan → keep v3's hook
-- review → `@reviewer` invoked by `/ship` or a PR check
-- A thin `/ship` runs all gates on demand, but the **hooks make them fire even when `/ship` isn't called** — fixing v3's skippable-prose flaw. Override pattern (`[no-docs]`, `[no-retro]`) for conscious opt-out.
+## Honest limits (documented, accepted)
+- **LLM review has an irreducible noise floor** — identical content can get different verdicts. Strict mode will occasionally false-block; that's what `[no-review]` / admin-merge are for. Always verify a finding against the real code before acting (we caught every false positive this way).
+- **Per-file review can't see cross-file interactions** — the tradeoff for killing whole-diff truncation.
 
-### Phase 1b tail (defer until Phase 2 or as needed)
-- **Autonomous sweep triggers** (commit / marker-threshold / schedule). **Estimate cost first** (Haiku, bounded) — `MANDATORY.md` rule #1. The $24 lesson.
-- **`route-learning.sh` rough edge:** procedure/fact filenames are slugged from the full statement → ugly long names. Add `--slug` or cap harder. (Caught when the loop scaffolded `verify-shell-scripts-by-running-them-against-a-t.md`.)
-- Verify-the-working pass could become its own light verifier agent.
-- Scope-promotion ladder (project→user on 2nd-repo recurrence) — still needs a cross-project learning index that doesn't exist. Deferred.
+## Deferred / optional (NOT blocking — V4 is done without these)
+- **Autonomous sweep triggers** (commit / threshold / schedule) for the retro loop — recurring spend → **estimate cost first** (Haiku, bounded), `MANDATORY.md` #1.
+- **`route-learning.sh` slug rough edge** — procedure/fact filenames slugged from the full statement get long; add `--slug` or cap harder.
+- **Scope-promotion ladder** (project→user on 2nd-repo recurrence) — needs a cross-project learning index that doesn't exist yet.
+- **Cross-file review** for S6 (per-file is the current tradeoff).
 
-### Gotchas (carry forward — they cost real money/time)
-- **Workflow `args` arrive as a JSON *string*** — `JSON.parse` it.
+## Gotchas (carry forward)
+- **Workflow `args` arrive as a JSON string** — `JSON.parse` it.
+- **GitHub runs `run:` blocks with `set -e`** — aggregator scripts must be set-e-proof (cost a debugging cycle on the review gate).
+- **GitHub Models caps requests** (~8k tokens for gpt-4o) — hence per-file review.
 - **Soft prose rules get bypassed** — hooks + CI, not "NEVER SKIP".
-- **Cost-estimate before any scheduled/recurring run** (`MANDATORY.md` #1). $24 burned learning this.
+- **Cost-estimate before any scheduled/recurring run** (`MANDATORY.md` #1). The $24 lesson.
 - **Spot-check actual output, not "it ran."**
-- **User-global memory (`~/.claude/memory/`) does NOT auto-load** — route user-scope to `CLAUDE.md`/`MANDATORY.md`/hooks.
-- **Writing to agent-loaded startup config** (`~/.claude/*`, the plugin symlink, `settings.json`) is **blocked by the auto-mode self-modification guard** — needs explicit user approval; route such learnings via *propose*, don't auto-apply.
+- **Writing to agent-loaded config** (`~/.claude/*`, the plugin symlink, `settings.json`) is **blocked by the self-modification guard** — needs explicit user approval.
 
 ## Resume Prompt
 
-> Continue ShipIt V4. Phase 1b (Retro v4) is built and proven — read `~/code/shipit-v4/HANDOFF.md` and `docs/plans/2026-06-08-shipit-v4-architecture.md`. Next is **Phase 2: gates as hooks + CI** — generalize ProveIt's `check-docs-sync.sh` pattern, add a `pre-push` test/typecheck/build hook + a no-push-to-main hook, keep v3's security scan, and a thin `/ship` that runs them on demand while the hooks fire regardless. Smallest-thing-that-works first, prove each gate bites (deliberate-failure test) before the next. Respect the gotchas above (cost-estimate before any scheduled run; hooks/CI not prose; spot-check real output). v1/v3 are read-only history.
+> ShipIt V4 is **complete** — read `~/code/shipit-v4/HANDOFF.md`. The learning loop (Phase 1b) and the gate set (Phase 2) are built, merged, dogfooded; the review gate is strict and `main` is branch-protected. There is no open build work. If extending it, `main` is protected: branch → PR → pass `review`/`docs-sync`/`CI` → merge (use `[no-review]` or admin-merge for a verified false positive). Optional follow-ups (none blocking): autonomous retro-sweep triggers (estimate cost first), `route-learning.sh` slug cleanup, cross-project scope-promotion index, cross-file review for S6. v1/v3 are read-only history.
