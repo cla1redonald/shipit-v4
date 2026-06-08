@@ -1,0 +1,11 @@
+{
+  "name": "shipit",
+  "owner": { "name": "Claire Donald" },
+  "plugins": [
+    {
+      "name": "shipit",
+      "source": ".",
+      "description": "ShipIt V4 — gate discipline + a learning loop that actually fires. Native-primitives era; a fraction of v3's surface."
+    }
+  ]
+}
