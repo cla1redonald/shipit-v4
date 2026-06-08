@@ -123,11 +123,19 @@ Each step lands behind a deliberate-failure test — prove it goes **red**, then
 
 ## Completion bar (the contract — "not done until all done")
 
-- [ ] Every gate fires via ≥1 automatic mechanism (global hook or installed CI/git-hook).
-- [ ] Each blocking gate **proven to bite** (deliberate red → green), not just present.
-- [ ] Defense in depth (local hook **and** CI) for no-push, docs-sync, test/build.
-- [ ] Override tokens (`[no-docs]`, `[no-test]`, `[no-retro]`) work on every gate that has one.
-- [ ] Installer is idempotent, `--dry-run`-able, and **dogfooded into shipit-v4** (plus a sandbox proof).
-- [ ] `/ship` runs the full sequence; hooks fire even when `/ship` is skipped.
-- [ ] Docs in sync (V4's own docs-sync gate green); `HISTORY.md` + `CLAUDE.md` updated.
-- [ ] Cost documented; nothing recurring enabled without explicit approval.
+**Status: BUILT (S1–S8) on branch `phase-2-gates` → PR #2.** Phase 1b merged (#1).
+
+- [x] Every gate fires via ≥1 automatic mechanism (global hook or installed CI/git-hook).
+- [x] Each blocking gate **proven to bite** (deliberate red → green) — incl. live: the review gate caught a real `ci.yml` bug on PR #2.
+- [x] Defense in depth (local hook **and** CI) for no-push, docs-sync, test/build.
+- [x] Override tokens (`[no-docs]`, `[no-test]`, `[no-retro]`) work on every gate that has one.
+- [x] Installer is idempotent, `--dry-run`-able, and **dogfooded into shipit-v4** (plus a sandbox proof).
+- [x] `/ship` runs the full sequence; hooks fire even when `/ship` is skipped.
+- [x] Docs in sync (V4's own docs-sync gate green on PR #2); `CLAUDE.md` updated.
+- [x] Cost documented; review uses keyless GitHub Models (no recurring OpenAI wallet).
+
+## Known limit + the one follow-up (S6 v2)
+
+The dogfood on PR #2 proved the gate works **and** exposed its honest ceiling: on a **large PR the diff is truncated** (GitHub Models ~8k-token request cap), and the reviewer then **speculates** — on PR #2 it raised a false `MUST-FIX` about `block-sensitive-paths.sh` ("`block` called with no argument") that does not exist in the real file. Verification caught it; correct code was left unchanged. Normal-sized PRs are reviewed whole and don't hit this.
+
+**S6 v2 (follow-up, not blocking):** kill truncation false-positives by reviewing **per-file** (one bounded call per changed file) or using a larger-context GitHub Models model, instead of one truncated whole-diff call. Until then the gate is **advisory-leaning** (gates on the `VERDICT:` line; no branch protection), so a false red doesn't block a merge — a human verifies, as designed.
