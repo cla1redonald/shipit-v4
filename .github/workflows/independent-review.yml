@@ -37,18 +37,23 @@ jobs:
           # GitHub Models (gpt-4o, free tier) caps the request at 8000 tokens. Keep the
           # diff well under that: ~22k chars ≈ 5.5k tokens, leaving room for the prompt.
           # Exclude lockfiles. Large PRs are truncated (and the comment says so).
+          FILES=$(git diff --name-only "$base...HEAD")
           FULL=$(git diff "$base...HEAD" -- . ':(exclude)**/package-lock.json' ':(exclude)**/*.lock')
           DIFF=$(printf '%s' "$FULL" | head -c 22000)
           TRUNC=""
           if [ "${#FULL}" -gt 22000 ]; then
-            TRUNC=" — TRUNCATED to the first 22000 of ${#FULL} chars; review the remainder by hand"
+            TRUNC=" — NOTE: TRUNCATED to the first 22000 of ${#FULL} chars; review only what is shown"
           fi
           {
             echo "REVIEW_PROMPT<<__SHIPIT_REVIEW_EOF__"
-            echo "Review this pull request diff. It was written by the Claude AI model; you are an independent reviewer from a different model family. Your job is to find what it got WRONG or MISSED — correctness bugs, security holes, data loss, broken edge cases, unhandled errors. Do not rubber-stamp and do not bikeshed style."
+            echo "Review this pull request. It was written by the Claude AI model; you are an independent reviewer from a different model family. Find what it got WRONG or MISSED — correctness bugs, security holes, data loss, broken edge cases, unhandled errors. Do not rubber-stamp and do not bikeshed style."
             echo
-            echo "Output a short findings list, each tagged [MUST-FIX] (correctness / security / data-loss) or [NIT] (minor / style). Cite the file where you can."
-            echo "End with EXACTLY one final line: 'VERDICT: MUST-FIX' if there is at least one MUST-FIX, otherwise 'VERDICT: OK'."
+            echo "IMPORTANT: the diff may be truncated and lockfiles are excluded. Review ONLY the code shown below. NEVER flag a file as missing or absent just because it is not in the diff — every file in the 'Files changed' list below IS present in the PR."
+            echo
+            echo "Output a short findings list, each tagged [MUST-FIX] (correctness / security / data-loss) or [NIT] (minor / style). Cite the file. If you list ANY [MUST-FIX] finding, your final line MUST be exactly 'VERDICT: MUST-FIX'; otherwise exactly 'VERDICT: OK'. Output that verdict line once, last."
+            echo
+            echo "Files changed in this PR:"
+            echo "$FILES"
             echo
             echo "Diff${TRUNC}:"
             echo '```diff'
@@ -59,7 +64,7 @@ jobs:
 
       - name: Cross-model review via GitHub Models
         id: ai
-        uses: actions/ai-inference@v1   # TODO: pin to a commit SHA for supply-chain hardening
+        uses: actions/ai-inference@b81b2afb8390ee6839b494a404766bef6493c7d9 # v1, pinned for supply-chain safety
         with:
           model: openai/gpt-4o
           max-completion-tokens: 1200
