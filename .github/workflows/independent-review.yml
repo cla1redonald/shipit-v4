@@ -33,6 +33,9 @@ jobs:
     timeout-minutes: 15
     env:
       REVIEW_MODEL: ${{ vars.SHIPIT_REVIEW_MODEL || 'openai/gpt-4.1' }}
+      # STRICT=true → fail on ANY [MUST-FIX] tag, not just the final VERDICT line.
+      # Default advisory (verdict line only); set repo var SHIPIT_REVIEW_STRICT=true to harden.
+      STRICT: ${{ vars.SHIPIT_REVIEW_STRICT || 'false' }}
       MAX_FILES: "25"          # cost cap: never review more than this many files per PR
       PER_FILE_CHARS: "24000"  # ~6k tokens; only a single oversized file is truncated
     steps:
@@ -49,6 +52,13 @@ jobs:
           set +e +u +o pipefail   # aggregator: handle every error manually; never spurious-fail (GH defaults to set -e)
           base="origin/$BASE_REF"
           git fetch -q origin "$BASE_REF" || true
+
+          # Conscious opt-out (like [no-docs]/[no-test]) — for a verified false positive.
+          if git log --format='%B' "$base..HEAD" 2>/dev/null | grep -qiF '[no-review]'; then
+            echo "[no-review] override present in a commit message — skipping independent review."
+            gh pr comment "$PR" --body "🔍 Independent review **skipped** via the \`[no-review]\` override." || true
+            exit 0
+          fi
 
           # Changed files, excluding lockfiles and binaries; capped at MAX_FILES.
           mapfile -t ALL < <(git diff --name-only "$base...HEAD" -- . ':(exclude)**/package-lock.json' ':(exclude)**/*.lock')
@@ -88,11 +98,20 @@ jobs:
             if printf '%s\n' "$content" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then
               overall_ok=0
             fi
+            # Strict mode: also trip on any [MUST-FIX] tag, not just the verdict line.
+            if [ "$STRICT" = "true" ] && printf '%s\n' "$content" | grep -qiE '\[MUST-FIX\]'; then
+              overall_ok=0
+            fi
           done
 
           {
             echo "## 🔍 Independent cross-model review (per-file)"
             echo "_Reviewer: \`$REVIEW_MODEL\` via GitHub Models — one call per changed file, so each file is seen complete (no whole-diff truncation). The author (Claude) does not review its own work._"
+            if [ "$STRICT" = "true" ]; then
+              echo "_Mode: **STRICT** — any \`[MUST-FIX]\` blocks the merge. Override a false positive with \`[no-review]\` in a commit message._"
+            else
+              echo "_Mode: advisory — blocks only on a \`VERDICT: MUST-FIX\` line._"
+            fi
             [ "$SKIPPED" -gt 0 ] && echo && echo "> ⚠️ ${SKIPPED} file(s) beyond the ${MAX_FILES}-file cap were NOT reviewed — review them by hand."
             echo
             cat findings.md
