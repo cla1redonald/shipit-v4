@@ -48,11 +48,14 @@ v3's prose gates, now mechanism. **Global plugin hooks** (zero setup) + **per-re
 - **LLM review has an irreducible noise floor** — identical content can get different verdicts. Strict mode will occasionally false-block; that's what `[no-review]` / admin-merge are for. Always verify a finding against the real code before acting (we caught every false positive this way).
 - **Per-file review can't see cross-file interactions** — the tradeoff for killing whole-diff truncation.
 
-## Deferred / optional (NOT blocking — V4 is done without these)
-- **Autonomous sweep triggers** (commit / threshold / schedule) for the retro loop — recurring spend → **estimate cost first** (Haiku, bounded), `MANDATORY.md` #1.
-- **`route-learning.sh` slug rough edge** — procedure/fact filenames slugged from the full statement get long; add `--slug` or cap harder.
-- **Scope-promotion ladder** (project→user on 2nd-repo recurrence) — needs a cross-project learning index that doesn't exist yet.
-- **Cross-file review** for S6 (per-file is the current tradeoff).
+## Phase 3 + the deferred enhancements — ALL DONE
+- ✅ **Phase 3 roster packaging** — `agents/`: reviewer, docs, engineer, researcher (+ retro). `commands/`: /spec, /gameplan, /prd-review, /code-review, /tdd-build (+ /ship, /retro). Ported from v3, orchestration/team-mode coupling trimmed; no dangling refs to agents V4 doesn't ship.
+- ✅ **Autonomous sweep trigger** — cost-safe: `gates/retro-sweep-nudge.sh` (PostToolUse on `git commit`, no LLM) nudges you to run `/retro` once markers cross `SHIPIT_SWEEP_THRESHOLD`. Never spawns an LLM job; no cron (the $24 lesson).
+- ✅ **`route-learning.sh` slug cleanup** — short filenames + `--slug`.
+- ✅ **Scope-promotion ladder** — global index (`~/.claude/shipit-retro/learning-index.tsv`); a 2nd-repo recurrence proposes user-scope promotion (never auto).
+- ✅ **Cross-file review** for S6 — a final pass reviews the change-stat + cross-file signature diff after the per-file loop.
+
+**Nothing is open. V4 is complete.** (Only an unattended-cron sweep remains deliberately NOT built — it would bill the API wallet; build it only with an explicit cost estimate + approval.)
 
 ## Gotchas (carry forward)
 - **Workflow `args` arrive as a JSON string** — `JSON.parse` it.
