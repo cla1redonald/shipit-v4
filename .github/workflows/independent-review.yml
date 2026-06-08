@@ -50,7 +50,8 @@ jobs:
             echo
             echo "IMPORTANT: the diff may be truncated and lockfiles are excluded. Review ONLY the code shown below. NEVER flag a file as missing or absent just because it is not in the diff — every file in the 'Files changed' list below IS present in the PR."
             echo
-            echo "Output a short findings list, each tagged [MUST-FIX] (correctness / security / data-loss) or [NIT] (minor / style). Cite the file. If you list ANY [MUST-FIX] finding, your final line MUST be exactly 'VERDICT: MUST-FIX'; otherwise exactly 'VERDICT: OK'. Output that verdict line once, last."
+            echo "Reserve [MUST-FIX] for a CONCRETE, demonstrable defect in the changed code — a real bug, security hole, or data-loss path you can point to a specific line for. Design preferences, 'consider…' suggestions, process or CI-config opinions, and style are [NIT], NEVER [MUST-FIX]. Cite the file for each finding."
+            echo "Final line, exactly once and last: 'VERDICT: MUST-FIX' only if you listed at least one genuine [MUST-FIX]; otherwise 'VERDICT: OK'."
             echo
             echo "Files changed in this PR:"
             echo "$FILES"
