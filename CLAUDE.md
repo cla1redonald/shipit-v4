@@ -36,11 +36,22 @@ Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:**
 - **Global guards** are wired in `hooks/hooks.json`. **Per-repo gates** are wired by the installer `scripts/install-gates.sh` (S5; copies `gates/` → `.shipit-gates/`, drops CI + a `pre-push` hook). **`/ship`** (`commands/ship.md`) runs the lot on demand, but the hooks fire even when it isn't called — that's the v3 fix.
 - **Independent review** (`independent-review.yml`, S6 v2) reviews **each changed file in its own GitHub Models call** (`openai/gpt-4.1`, swappable via the `SHIPIT_REVIEW_MODEL` repo variable), so every file is seen *complete* — killing the whole-diff truncation that made v1 speculate. Bounded to 25 files/PR (the rest are listed, never silently dropped). **Remaining limits:** per-file review can't see cross-file interactions, and a single >24k-char file is truncated (and flagged). Gates on each file's `VERDICT:` line by default; set repo var **`SHIPIT_REVIEW_STRICT=true`** for **strict mode** (blocks on any `[MUST-FIX]` tag). **Escape hatch:** `[no-review]` in a commit message skips the gate for a verified false positive (like `[no-docs]`/`[no-test]`); with `enforce_admins=false`, an admin can also merge past it. **Branch protection** on `main` requires the `review`, `docs-sync`, and `Test, Typecheck & Build` checks + a PR (no direct push).
 
+## Composable subagents & skills (Phase 3)
+
+V4 shed the orchestration *framework* but kept the few things people actually reached for, as **on-demand, composable subagents** (summon ad hoc — not a first-class roster) and **standalone skills**. For multi-agent builds, use native **dynamic workflows / agent teams**, not a roster.
+
+- **Agents** (`agents/`): `retro` (the loop) · `reviewer` · `docs` · `engineer` · `researcher`.
+- **Skills** (`commands/`): `/spec` · `/gameplan` · `/prd-review` · `/code-review` · `/tdd-build` · `/ship` · `/retro`.
+
+Ported from v3 with the orchestration/team-mode coupling trimmed (no `/orchestrate`, no `MODE: team`). V4 deliberately does **not** ship the barely-used v3 roster (architect, pm, designer, devsecops, qa, strategist, orchestrator) — summon a specialist ad hoc if a build genuinely needs one.
+
 ## Routing — the rule that makes it worth doing
 
 A learning only counts if it **fires by itself next time**. Route to an auto-loading mechanism (a `CLAUDE.md` rule, an auto-loaded memory file, a hook) — never to a note nobody re-reads. That re-read failure is the V3 flaw this loop exists to fix.
 
 **Hard safety (code-enforced):** anything **user-scope** or any **enforcement change** (a hook, a CI gate, a `MANDATORY.md` rule) is **proposed**, never auto-applied — it lands in `PROPOSED-LEARNINGS.md` for a human. The `route-learning.sh` script forces this even if the model says `direct`.
+
+**Scope-promotion ladder (live):** `route-learning.sh` records each project learning in a global index (`~/.claude/shipit-retro/learning-index.tsv`). When the same learning recurs in a **2nd distinct repo**, it proposes promoting it to user scope (never auto-promotes). Filenames use a short slug (`--slug` to override).
 
 ## Cost discipline (applies to V4 itself)
 
