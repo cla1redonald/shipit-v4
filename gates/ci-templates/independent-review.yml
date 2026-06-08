@@ -98,11 +98,31 @@ jobs:
             if printf '%s\n' "$content" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then
               overall_ok=0
             fi
-            # Strict mode: also trip on any [MUST-FIX] tag, not just the verdict line.
-            if [ "$STRICT" = "true" ] && printf '%s\n' "$content" | grep -qiE '\[MUST-FIX\]'; then
+            # Strict mode: also trip on a [MUST-FIX] FINDING tag — one that LEADS a line
+            # (after list/heading markers), NOT a prose mention like "no [MUST-FIX] issues".
+            if [ "$STRICT" = "true" ] && printf '%s\n' "$content" | grep -qiE '^[[:space:]]*[-*#>0-9.)( ]*\[MUST-FIX\]'; then
               overall_ok=0
             fi
           done
+
+          # --- cross-file pass: catch interactions a per-file review cannot see ---
+          if [ "${#FILES[@]}" -gt 1 ]; then
+            stat="$(git diff --stat "$base...HEAD" -- "${FILES[@]}" 2>/dev/null | head -c 4000)"
+            sigs="$(git diff "$base...HEAD" -- "${FILES[@]}" 2>/dev/null \
+              | grep -E '^[+-].*(function |def |class |export |const .+=|=>|sub |--[a-z-]+\)|^[+-][A-Za-z_]+\(\))' \
+              | head -c 16000)"
+            xsys="You are an independent reviewer given a CROSS-FILE summary of one PR (the file-change stat + the added/removed definition & signature lines across files). Identify ONLY concrete cross-file interaction risks: a changed signature/contract in one file that breaks a caller in another, a removed export/function still referenced elsewhere, an interface mismatch. Name the files. Do not repeat single-file style nits and do not speculate. Reserve [MUST-FIX] for a concrete cross-file break. End with exactly 'VERDICT: MUST-FIX' or 'VERDICT: OK'."
+            xuser="$(printf 'Change stat:\n%s\n\nDefinition/signature lines changed across files:\n%s' "$stat" "$sigs")"
+            xbody="$(jq -n --arg m "$REVIEW_MODEL" --arg s "$xsys" --arg u "$xuser" \
+              '{model:$m, max_tokens:600, messages:[{role:"system",content:$s},{role:"user",content:$u}]}')"
+            xresp="$(curl -sS -X POST https://models.github.ai/inference/chat/completions \
+              -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" -H "Accept: application/vnd.github+json" \
+              -d "$xbody" 2>/dev/null)"
+            xcontent="$(printf '%s' "$xresp" | jq -r '.choices[0].message.content // .error.message // "(no response)"' 2>/dev/null)"
+            { echo "### 🔗 Cross-file interactions"; echo "$xcontent"; echo; } >> findings.md
+            if printf '%s\n' "$xcontent" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then overall_ok=0; fi
+            if [ "$STRICT" = "true" ] && printf '%s\n' "$xcontent" | grep -qiE '^[[:space:]]*[-*#>0-9.)( ]*\[MUST-FIX\]'; then overall_ok=0; fi
+          fi
 
           {
             echo "## 🔍 Independent cross-model review (per-file)"
