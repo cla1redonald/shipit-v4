@@ -1,0 +1,43 @@
+name: CI
+
+# Runs on every pull request targeting main.
+# All three steps (test, typecheck, build) are guarded: if the script is absent
+# from package.json the step is skipped cleanly. This template works for repos
+# that have none of these scripts as well as repos that have all three.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Test, Typecheck & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --if-present silently skips the step when the script is not defined
+      # in package.json, so this template never fails a repo that has no tests.
+
+      - name: Test
+        run: npm test --if-present -- --run
+        # --run   puts vitest into CI (non-watch) mode; jest ignores the flag.
+
+      - name: Typecheck
+        run: npm run typecheck --if-present
+
+      - name: Build
+        run: npm run build --if-present
+        env:
+          # Placeholder so build-time SDK instantiations don't hard-fail in CI.
+          # Override in your repo's secrets if a real key is needed at build time.
+          ANTHROPIC_API_KEY: sk-ant-ci-placeholder-not-real

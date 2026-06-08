@@ -20,7 +20,7 @@ Two capture paths, one shared core. **Model judges, code enforces.**
 | `hooks/retro-tripwire.sh` | the tripwire — free, every `Stop`, over-flags on purpose |
 | `commands/retro.md` | the `/retro` entry point (Path A and Path B) |
 
-## Gates (Phase 2 — in progress)
+## Gates (Phase 2)
 
 Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:** universal cheap guards fire as **global plugin hooks** (every session, zero setup); repo-specific backstops get **installed per-repo** (CI + git hooks). See `docs/plans/2026-06-08-shipit-v4-phase2-gates.md`.
 
@@ -31,9 +31,10 @@ Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:**
 | `detect-secrets.sh` | global PostToolUse(Write/Edit) — warns on secrets | ✅ |
 | `check-docs-sync.sh` (+ `ci-templates/docs-check.yml`) | per-repo CI + commit reminder; `[no-docs]` | ✅ |
 | `pre-push-checks.sh` (+ `ci-templates/ci.yml`) | per-repo `pre-push` hook + CI; `[no-test]` | ✅ |
-| independent review | required CI check, non-Claude model via GitHub Models | ⏳ S6 |
+| `.github/workflows/independent-review.yml` | required CI check — a **non-Claude** model reviews every PR (author ≠ reviewer), keyless via **GitHub Models** | ✅ |
 
-The global guards are wired in `hooks/hooks.json`. The per-repo gates are wired by the installer (`scripts/install-gates.sh`, S5).
+- **Global guards** are wired in `hooks/hooks.json`. **Per-repo gates** are wired by the installer `scripts/install-gates.sh` (S5; copies `gates/` → `.shipit-gates/`, drops CI + a `pre-push` hook). **`/ship`** (`commands/ship.md`) runs the lot on demand, but the hooks fire even when it isn't called — that's the v3 fix.
+- **Independent review** uses `openai/gpt-4.1` by default, swappable via the `SHIPIT_REVIEW_MODEL` repo variable. **Honest limit:** an LLM reviewer is somewhat noisy and the GitHub Models request is capped (~8k tokens for gpt-4o), so very large PRs get a *truncated* diff and the reviewer may speculate. Normal-sized PRs are reviewed whole. It gates on the model's `VERDICT:` line (advisory-leaning); flip to strict (block on any `[MUST-FIX]`) if you want more teeth.
 
 ## Routing — the rule that makes it worth doing
 
