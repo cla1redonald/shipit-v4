@@ -1,0 +1,48 @@
+name: CI
+
+# Runs on every pull request targeting main.
+# Skip-SAFE: if there is no package.json, the whole job no-ops cleanly (a repo with
+# no JS toolchain must not fail this gate). If package.json exists, test/typecheck/
+# build run only when those scripts are defined (--if-present).
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Test, Typecheck & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect package.json
+        id: pkg
+        run: |
+          if [ -f package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json — nothing to test/typecheck/build. Passing."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.pkg.outputs.exists == 'true'
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm ci || npm install   # ci needs a lockfile; fall back to install
+
+      - name: Test
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm test --if-present -- --run   # --run = vitest CI mode; jest ignores it
+
+      - name: Typecheck
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm run typecheck --if-present
+
+      - name: Build
+        if: steps.pkg.outputs.exists == 'true'
+        run: npm run build --if-present
