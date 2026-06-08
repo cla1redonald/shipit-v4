@@ -29,6 +29,15 @@
             "command": "bash ${CLAUDE_PLUGIN_ROOT}/gates/detect-secrets.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/gates/retro-sweep-nudge.sh"
+          }
+        ]
       }
     ],
     "Stop": [
