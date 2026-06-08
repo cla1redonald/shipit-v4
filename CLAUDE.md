@@ -34,7 +34,7 @@ Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:**
 | `.github/workflows/independent-review.yml` | required CI check — a **non-Claude** model reviews every PR (author ≠ reviewer), keyless via **GitHub Models** | ✅ |
 
 - **Global guards** are wired in `hooks/hooks.json`. **Per-repo gates** are wired by the installer `scripts/install-gates.sh` (S5; copies `gates/` → `.shipit-gates/`, drops CI + a `pre-push` hook). **`/ship`** (`commands/ship.md`) runs the lot on demand, but the hooks fire even when it isn't called — that's the v3 fix.
-- **Independent review** uses `openai/gpt-4.1` by default, swappable via the `SHIPIT_REVIEW_MODEL` repo variable. **Honest limit:** an LLM reviewer is somewhat noisy and the GitHub Models request is capped (~8k tokens for gpt-4o), so very large PRs get a *truncated* diff and the reviewer may speculate. Normal-sized PRs are reviewed whole. It gates on the model's `VERDICT:` line (advisory-leaning); flip to strict (block on any `[MUST-FIX]`) if you want more teeth.
+- **Independent review** (`independent-review.yml`, S6 v2) reviews **each changed file in its own GitHub Models call** (`openai/gpt-4.1`, swappable via the `SHIPIT_REVIEW_MODEL` repo variable), so every file is seen *complete* — killing the whole-diff truncation that made v1 speculate. Bounded to 25 files/PR (the rest are listed, never silently dropped). **Remaining limits:** per-file review can't see cross-file interactions, and a single >24k-char file is truncated (and flagged). Gates on each file's `VERDICT:` line (advisory-leaning); flip to strict (block on any `[MUST-FIX]`) for more teeth.
 
 ## Routing — the rule that makes it worth doing
 
