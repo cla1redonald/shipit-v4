@@ -46,7 +46,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          set -uo pipefail
+          set +e +u +o pipefail   # aggregator: handle every error manually; never spurious-fail (GH defaults to set -e)
           base="origin/$BASE_REF"
           git fetch -q origin "$BASE_REF" || true
 
@@ -82,11 +82,12 @@ jobs:
               echo "$content"
               echo
             } >> findings.md
-            # Parse ONLY a standalone verdict line (last one wins) — not the string
-            # appearing mid-prose. Without this, reviewing a file that itself contains
-            # "VERDICT: MUST-FIX" (like this very workflow) trips a naive grep.
-            verdict="$(printf '%s\n' "$content" | grep -iE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$' | tail -1)"
-            [ -n "$verdict" ] && overall_ok=0
+            # Trip ONLY on a standalone verdict line — not the string mid-prose (reviewing
+            # this very workflow, which contains verdict strings, would else false-trip).
+            # Explicit if-block so a no-match never bubbles a non-zero exit.
+            if printf '%s\n' "$content" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then
+              overall_ok=0
+            fi
           done
 
           {
