@@ -1,0 +1,79 @@
+name: Independent review (cross-model)
+
+# The author does not review its own work. This PR was authored with Claude; an
+# INDEPENDENT, non-Claude model reviews it before merge. Keyless: it calls GitHub
+# Models via the built-in GITHUB_TOKEN + `models: read` — no OpenAI key, no separate
+# wallet. (Adversarial review prompt ported from ProveIt's openai-review.mjs.)
+#
+# Cost: one GitHub Models call per PR (~15k input tokens, ≤1200 out) — pennies, drawn
+# from the account's GitHub Models / Copilot allowance. Bounded diff keeps it small.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+
+concurrency:
+  group: independent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Assemble bounded review prompt
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch -q origin "${{ github.base_ref }}" || true
+          # Exclude lockfiles; cap at 60k chars (~15k tokens) to stay small + cheap.
+          DIFF=$(git diff "$base...HEAD" -- . ':(exclude)**/package-lock.json' ':(exclude)**/*.lock' | head -c 60000)
+          {
+            echo "REVIEW_PROMPT<<__SHIPIT_REVIEW_EOF__"
+            echo "Review this pull request diff. It was written by the Claude AI model; you are an independent reviewer from a different model family. Your job is to find what it got WRONG or MISSED — correctness bugs, security holes, data loss, broken edge cases, unhandled errors. Do not rubber-stamp and do not bikeshed style."
+            echo
+            echo "Output a short findings list, each tagged [MUST-FIX] (correctness / security / data-loss) or [NIT] (minor / style). Cite the file where you can."
+            echo "End with EXACTLY one final line: 'VERDICT: MUST-FIX' if there is at least one MUST-FIX, otherwise 'VERDICT: OK'."
+            echo
+            echo "Diff:"
+            echo '```diff'
+            echo "$DIFF"
+            echo '```'
+            echo "__SHIPIT_REVIEW_EOF__"
+          } >> "$GITHUB_ENV"
+
+      - name: Cross-model review via GitHub Models
+        id: ai
+        uses: actions/ai-inference@v1   # TODO: pin to a commit SHA for supply-chain hardening
+        with:
+          model: openai/gpt-4o
+          max-completion-tokens: 1200
+          system-prompt: "You are an independent, adversarial code reviewer from a different model family than the author. You did NOT write this code. Be concrete and specific; cite files. Prefer real correctness and security findings over style. Never approve code you have not actually scrutinised."
+          prompt: ${{ env.REVIEW_PROMPT }}
+
+      - name: Post review comment + gate on verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESP: ${{ steps.ai.outputs.response }}
+        run: |
+          printf '%s\n' "$RESP" > review.md
+          {
+            echo "## 🔍 Independent cross-model review"
+            echo "_Reviewer: \`openai/gpt-4o\` via GitHub Models. The author (Claude) does not review its own work._"
+            echo
+            cat review.md
+          } > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md || true
+          if grep -qiE 'VERDICT:[[:space:]]*MUST-FIX' review.md; then
+            echo "::error::Independent review flagged MUST-FIX issue(s) — see the PR comment."
+            exit 1
+          fi
+          echo "Independent review: OK"
