@@ -34,8 +34,15 @@ jobs:
         run: |
           base="origin/${{ github.base_ref }}"
           git fetch -q origin "${{ github.base_ref }}" || true
-          # Exclude lockfiles; cap at 60k chars (~15k tokens) to stay small + cheap.
-          DIFF=$(git diff "$base...HEAD" -- . ':(exclude)**/package-lock.json' ':(exclude)**/*.lock' | head -c 60000)
+          # GitHub Models (gpt-4o, free tier) caps the request at 8000 tokens. Keep the
+          # diff well under that: ~22k chars ≈ 5.5k tokens, leaving room for the prompt.
+          # Exclude lockfiles. Large PRs are truncated (and the comment says so).
+          FULL=$(git diff "$base...HEAD" -- . ':(exclude)**/package-lock.json' ':(exclude)**/*.lock')
+          DIFF=$(printf '%s' "$FULL" | head -c 22000)
+          TRUNC=""
+          if [ "${#FULL}" -gt 22000 ]; then
+            TRUNC=" — TRUNCATED to the first 22000 of ${#FULL} chars; review the remainder by hand"
+          fi
           {
             echo "REVIEW_PROMPT<<__SHIPIT_REVIEW_EOF__"
             echo "Review this pull request diff. It was written by the Claude AI model; you are an independent reviewer from a different model family. Your job is to find what it got WRONG or MISSED — correctness bugs, security holes, data loss, broken edge cases, unhandled errors. Do not rubber-stamp and do not bikeshed style."
@@ -43,7 +50,7 @@ jobs:
             echo "Output a short findings list, each tagged [MUST-FIX] (correctness / security / data-loss) or [NIT] (minor / style). Cite the file where you can."
             echo "End with EXACTLY one final line: 'VERDICT: MUST-FIX' if there is at least one MUST-FIX, otherwise 'VERDICT: OK'."
             echo
-            echo "Diff:"
+            echo "Diff${TRUNC}:"
             echo '```diff'
             echo "$DIFF"
             echo '```'
