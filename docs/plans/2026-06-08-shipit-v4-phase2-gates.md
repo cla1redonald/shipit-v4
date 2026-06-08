@@ -47,12 +47,24 @@ Genuine exceptions use a commit-message token, consistent across gates: **`[no-d
 | **sensitive-path block** | global PreToolUse(Write) block | hook | v3 `block-sensitive-paths.js` | none | write to `~/.ssh/…` / `.env` outside repo → blocked |
 | **docs-in-sync** | PreToolUse(Bash) commit reminder + CI | hook + CI | ProveIt `check-docs-sync.sh` + `docs-check.yml` (generalize: configurable code/doc globs) | `[no-docs]` | stage code w/o docs → CI red; add `[no-docs]` → green |
 | **test / typecheck / build** | PreToolUse(Bash) on `git push` runs repo scripts + CI | hook + CI | v3 `pre-push-check.js` + ProveIt `ci.yml` | `[no-test]` / `--no-verify` (local only; CI still enforces) | break a test → push blocked + CI red; fix → green |
-| **review (`@reviewer`)** | on-demand via `/ship` (LLM → not auto, by cost design); optional opt-in PR Action | skill / PR | v3 `agents/reviewer.md` | findings advisory unless Must-Fix | run on a diff with a planted bug → flagged |
+| **independent review** | **required blocking CI check** — a GitHub Action runs a *non-Claude* reviewer on every PR (author ≠ reviewer) | CI (required) | ProveIt `openai-review.mjs` prompt, via **GitHub Models** | Must-Fix → red; nits advisory | planted bug in a PR → check red; clean diff → green |
 | **retro** | tripwire (auto) + sweep (`/retro`) | — | Phase 1b ✅ | `[no-retro]` | done |
 
 **Detection (test/typecheck/build):** read `package.json` scripts (`test`, `typecheck`, `build`); pyproject/Makefile later. If none exist, **skip with a warning, don't block** — never punish a repo for having no tests yet.
 
 **docs-sync generalization:** ProveIt's script hardcodes `scripts/|agents/|commands/` ↔ `README|CLAUDE|AGENTS|docs`. Make the two globs configurable (env or `.shipit.json`), defaulting to V4's layout (add `hooks/`).
+
+### Review gate (S6) — independent, required, ideally keyless
+
+**Locked:** an **independent, non-Claude reviewer must pass before a Claude-authored PR can merge** — the author does not review its own work. Implemented as a **required blocking CI check** satisfied by **a GitHub Action reviewer** (one independent pass is enough; no second GitHub-Copilot/human gate required).
+
+**Recommended — GitHub Models (keyless).** The Action calls a GPT/o-series model (cross-model vs Claude → genuinely adversarial) through **GitHub Models**, authenticated with the built-in `GITHUB_TOKEN` + `permissions: models: read`. **No OpenAI key stored** — secret-management, rotation, and fork-exfil risk all disappear, and it's native to Actions. Reuse ProveIt's adversarial system prompt ("find what it missed or got wrong"). Cost runs against the **GitHub Models quota**, not the OpenAI wallet. *Confirm Models is enabled for the account and a per-PR review fits the tier.*
+
+**Fallback — bring-your-own OpenAI key.** Port `openai-review.mjs` into the Action; key from a **GitHub Environment** secret (scoped + protection rules), never a bare repo secret. Direct OpenAI billing; a long-lived key to rotate.
+
+**Security (either way):** minimal `permissions:` per job; trigger on `pull_request` (**never** `pull_request_target` with secrets — fork-exfil); pin third-party actions to a SHA; repo is public so the diff is already public, but never echo a key. GitHub withholds repo secrets from fork-triggered PRs by default.
+
+**Verdict semantics:** the reviewer returns **Must-Fix** (→ red, blocks merge) vs **Nit** (advisory). Hard on correctness, not a style bikeshed. **Proof it bites:** open a PR with a planted bug → the check goes red; fix it → green.
 
 ---
 
@@ -83,7 +95,7 @@ A slim port of v3's `commands/shipit.md` gate sequence: test/typecheck/build →
 | S3 | **docs-sync kit** (script + CI template + commit-reminder hook), generalized | code w/o docs → red; `[no-docs]` → green |
 | S4 | **test/typecheck/build kit** (pre-push script + CI template), with detection + graceful skip | failing test → blocked; no-test repo → skipped cleanly |
 | S5 | **installer** wiring S3+S4 into a repo, idempotent | install into sandbox, trip gates, re-run clean |
-| S6 | **review gate** — port `@reviewer` as on-demand subagent | planted bug → flagged |
+| S6 | **independent review gate** — GitHub Action runs a non-Claude reviewer (GitHub Models, keyless) as a required PR check | PR with a planted bug → check red; clean diff → green |
 | S7 | **`/ship`** orchestrating the full sequence + push/PR | runs in order; hooks still fire with `/ship` skipped |
 | S8 | **dogfood** the full kit into shipit-v4 + its own CI + docs | the gate-set bites on a real shipit-v4 commit |
 
@@ -94,15 +106,16 @@ Each step lands behind a deliberate-failure test — prove it goes **red**, then
 ## Cost (MANDATORY rule #1)
 
 - **Building Phase 2 ≈ $0 API.** S1–S5, S7, S8 are pure bash / git hooks / GitHub Actions — no LLM. My build work runs on the Max subscription.
-- **The only LLM-billed gate is `@reviewer`** (S6), and it's **on-demand** via `/ship` — you choose when. Rough order: a diff review is ~10–40k tokens depending on diff size. Not recurring.
-- **The one recurring-spend option** is an *opt-in* auto-PR-review GitHub Action (Claude reviews every PR). It is **off by default**; turning it on bills the API wallet per PR and needs an explicit estimate + your go-ahead first. The default posture (cheap gates auto, LLM gates on-demand) mirrors the Phase 1b tripwire/sweep split.
+- **The only LLM-billed gate is the independent review** (S6), and it now runs on **every PR** (required check) — so it *is* recurring. The cost posture depends on the reviewer backend:
+  - **GitHub Models (recommended):** no OpenAI wallet spend — usage runs against your **GitHub Models quota/tier**. Confirm the tier covers ~1 review per PR (a diff review is ~10–40k tokens depending on size); beyond the included tier it's GitHub-metered, not OpenAI.
+  - **BYO OpenAI key:** direct OpenAI billing per PR — roughly a few cents up to ~$0.50–1 on a large diff with `gpt-5.5` high-effort (pin exact pricing before enabling). Recurring API-wallet spend — flag it each time the volume changes.
 
 ---
 
 ## Open decisions (confirm before/within the build — defaults proposed)
 
 1. **In-session test-on-push: hard-block or warn?** Running the full test suite on every `git push` can be slow/annoying. *Recommend:* warn locally if it's slow, **hard-block in CI** (the wall is CI, the nudge is local). 
-2. **Review gate: on-demand only, or also the opt-in PR Action?** *Recommend:* ship on-demand (`/ship`) now; leave the recurring-cost PR Action as a documented opt-in for later.
+2. ~~Review gate posture~~ **DECIDED:** independent non-Claude reviewer, required blocking CI check, one pass suffices. *Remaining sub-choice:* **GitHub Models (keyless, recommended)** vs **BYO OpenAI key in a scoped Environment.** Default to GitHub Models unless you say otherwise.
 3. **Installer: copy vs symlink gate scripts into repos?** *Recommend:* **copy + version stamp** (stable, drift detectable) over symlink (auto-updates but breaks if the plugin moves).
 4. **Branch protection on `main`:** set it automatically via `gh` during install, or just document it? *Recommend:* offer it interactively (needs repo-admin), don't force.
 
