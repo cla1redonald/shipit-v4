@@ -82,7 +82,11 @@ jobs:
               echo "$content"
               echo
             } >> findings.md
-            printf '%s' "$content" | grep -qiE 'VERDICT:[[:space:]]*MUST-FIX' && overall_ok=0
+            # Parse ONLY a standalone verdict line (last one wins) — not the string
+            # appearing mid-prose. Without this, reviewing a file that itself contains
+            # "VERDICT: MUST-FIX" (like this very workflow) trips a naive grep.
+            verdict="$(printf '%s\n' "$content" | grep -iE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$' | tail -1)"
+            [ -n "$verdict" ] && overall_ok=0
           done
 
           {
