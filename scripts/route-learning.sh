@@ -27,7 +27,7 @@
 
 set -uo pipefail
 
-TYPE="" SCOPE="" REVIEW="" STATEMENT="" RATIONALE="" REPO=""
+TYPE="" SCOPE="" REVIEW="" STATEMENT="" RATIONALE="" REPO="" SLUG_ARG=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -37,12 +37,18 @@ while [ $# -gt 0 ]; do
     --statement) STATEMENT="${2:-}"; shift 2 ;;
     --rationale) RATIONALE="${2:-}"; shift 2 ;;
     --repo)      REPO="${2:-}"; shift 2 ;;
+    --slug)      SLUG_ARG="${2:-}"; shift 2 ;;   # optional explicit short filename slug
     *) echo "route-learning: unknown arg '$1'" >&2; exit 1 ;;
   esac
 done
 
 # --- validate -------------------------------------------------------------
 err() { echo "route-learning: $1" >&2; exit 1; }
+# A clean, SHORT slug for filenames: first ~6 words, ≤40 chars (not the whole statement).
+slugify() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' \
+    | sed 's/^-*//; s/-*$//' | cut -d- -f1-6 | cut -c1-40 | sed 's/-*$//'
+}
 case "$TYPE"   in rule|fact|check|procedure) ;; *) err "bad --type '$TYPE'" ;; esac
 case "$SCOPE"  in project|user) ;;             *) err "bad --scope '$SCOPE'" ;; esac
 case "$REVIEW" in direct|propose) ;;           *) err "bad --review '$REVIEW'" ;; esac
@@ -66,6 +72,7 @@ fi
 [ -n "$ENFORCED" ] && echo "route-learning: forced review=propose ($ENFORCED — never auto-applied)" >&2
 
 DATE="$(date +%Y-%m-%d)"
+SLUG="${SLUG_ARG:-}"; [ -n "$SLUG" ] || SLUG="$(slugify "$STATEMENT")"; [ -n "$SLUG" ] || SLUG="learning-$DATE"
 
 # --- propose: append a ready-to-apply entry, touch nothing global ---------
 if [ "$REVIEW" = "propose" ]; then
@@ -116,8 +123,6 @@ case "$TYPE" in
       MEMDIR="$REPO/memory"
     fi
     mkdir -p "$MEMDIR"
-    SLUG="$(printf '%s' "$STATEMENT" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-' | cut -c1-48)"
-    [ -n "$SLUG" ] || SLUG="learning-$DATE"
     FILE="$MEMDIR/$SLUG.md"
     {
       printf -- '---\nname: %s\ndescription: %s\nmetadata:\n  type: project\n---\n\n' "$SLUG" "$STATEMENT"
@@ -131,8 +136,6 @@ case "$TYPE" in
   procedure)
     # project procedure → a skill scaffold under <repo>/commands/.
     OUTDIR="$REPO/commands"; mkdir -p "$OUTDIR"
-    SLUG="$(printf '%s' "$STATEMENT" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-' | cut -c1-48)"
-    [ -n "$SLUG" ] || SLUG="procedure-$DATE"
     FILE="$OUTDIR/$SLUG.md"
     if [ -f "$FILE" ]; then
       echo "route-learning: skill $FILE already exists — left untouched (edit by hand)." >&2
@@ -149,4 +152,30 @@ case "$TYPE" in
     err "type '$TYPE' has no direct project path (should have been proposed)"
     ;;
 esac
+
+# --- cross-project scope-promotion ladder ---------------------------------
+# A project learning that RECURS in a 2nd repo isn't project-specific any more.
+# Record each project learning in a global index keyed by a signature; when the
+# same signature appears for a 2nd DISTINCT repo, PROPOSE promoting it to user
+# scope (never auto-promote — user scope is always propose).
+SIG="$(slugify "$STATEMENT")"
+IDXDIR="${SHIPIT_RETRO_DIR:-$HOME/.claude/shipit-retro}"; mkdir -p "$IDXDIR"
+LIDX="$IDXDIR/learning-index.tsv"
+if ! grep -qF "$(printf '%s\t%s' "$SIG" "$REPO")" "$LIDX" 2>/dev/null; then
+  printf '%s\t%s\t%s\t%s\n' "$SIG" "$REPO" "$DATE" "$TYPE" >> "$LIDX"
+fi
+repos="$(awk -F'\t' -v s="$SIG" '$1==s {print $2}' "$LIDX" 2>/dev/null | sort -u)"
+nrepos="$(printf '%s\n' "$repos" | grep -c .)"
+if [ "${nrepos:-0}" -ge 2 ]; then
+  names="$(printf '%s\n' "$repos" | sed 's#.*/##' | paste -sd, -)"
+  echo "route-learning: PROMOTION CANDIDATE — recurred in $nrepos repos ($names); proposing user-scope promotion." >&2
+  PROP="$REPO/PROPOSED-LEARNINGS.md"
+  [ -f "$PROP" ] || printf '# Proposed learnings — awaiting human review\n' > "$PROP"
+  {
+    printf '\n## %s — scope promotion (project → user)\n\n' "$DATE"
+    printf '**Learning:** %s\n\n' "$STATEMENT"
+    printf '**Why promote:** recurred across %s projects (%s) — it generalizes beyond one repo.\n\n' "$nrepos" "$names"
+    printf '**Apply to:** `~/.claude/CLAUDE.md` or `~/.claude/MANDATORY.md` (user scope — review first).\n'
+  } >> "$PROP"
+fi
 exit 0
