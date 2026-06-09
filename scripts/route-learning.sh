@@ -91,6 +91,7 @@ if [ "$REVIEW" = "propose" ]; then
   fi
   {
     printf '\n## %s — %s/%s\n\n' "$DATE" "$TYPE" "$SCOPE"
+    printf '**Status:** pending\n\n'
     printf '**Learning:** %s\n\n' "$STATEMENT"
     printf '**Why:** %s\n\n' "$RATIONALE"
     printf '**Apply to:** `%s`\n\n' "$TARGET"
@@ -173,6 +174,7 @@ if [ "${nrepos:-0}" -ge 2 ]; then
   [ -f "$PROP" ] || printf '# Proposed learnings — awaiting human review\n' > "$PROP"
   {
     printf '\n## %s — scope promotion (project → user)\n\n' "$DATE"
+    printf '**Status:** pending\n\n'
     printf '**Learning:** %s\n\n' "$STATEMENT"
     printf '**Why promote:** recurred across %s projects (%s) — it generalizes beyond one repo.\n\n' "$nrepos" "$names"
     printf '**Apply to:** `~/.claude/CLAUDE.md` or `~/.claude/MANDATORY.md` (user scope — review first).\n'

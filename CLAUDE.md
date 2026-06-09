@@ -15,7 +15,8 @@ Two capture paths, one shared core. **Model judges, code enforces.**
 | component | what it is |
 |---|---|
 | `agents/retro.md` | the judge — structured rubric, verify-the-working pass |
-| `scripts/route-learning.sh` | the placer — deterministic type×scope routing table |
+| `scripts/route-learning.sh` | the placer — deterministic type×scope routing table; stamps new proposals `**Status:** pending` |
+| `scripts/proposed-learnings.sh` | lifecycle for `PROPOSED-LEARNINGS.md` — `--list`/`--apply <n>`/`--archive <n>` so proposals don't sit "awaiting review" forever (P5c) |
 | `scripts/collect-candidates.sh` | sweep prep — markers → transcript slices (no LLM) |
 | `hooks/retro-tripwire.sh` | the tripwire — free, every `Stop`, over-flags on purpose |
 | `commands/retro.md` | the `/retro` entry point (Path A and Path B) |
