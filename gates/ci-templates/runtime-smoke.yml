@@ -54,6 +54,9 @@ jobs:
         if: steps.conf.outputs.skip == '0'
         env:
           SHIPIT_DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+          # Optional authed tier (data correctness): create a low-privilege test
+          # token in the app, store it as a repo secret, and uncomment:
+          # SHIPIT_SMOKE_AUTH_TOKEN: ${{ secrets.SHIPIT_SMOKE_TOKEN }}
         run: |
           set -a; . gates/smoke.conf; set +a
           bash gates/runtime-smoke-test.sh
