@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # install-gates.sh — wire ShipIt V4's per-repo gates into a target repo. IDEMPOTENT.
 #
-# Usage: scripts/install-gates.sh <repo> [--dry-run] [--protect]
+# Usage: scripts/install-gates.sh <repo> [--update] [--dry-run] [--protect]
 #   <repo>      target git repo
+#   --update    refresh ONLY the .shipit-gates/ scripts to this plugin version (the propagation
+#               path for a gate fix); leaves CI workflows, pre-push, settings.json, smoke.conf
 #   --dry-run   print the actions, change nothing
 #   --protect   also enable branch protection on main via gh (needs repo admin)
 #
@@ -24,16 +26,21 @@
 set -uo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO=""; DRY=0; PROTECT=0
+REPO=""; DRY=0; PROTECT=0; UPDATE=0
 for a in "$@"; do
   case "$a" in
     --dry-run) DRY=1 ;;
     --protect) PROTECT=1 ;;
+    # --update: refresh ONLY the .shipit-gates/ scripts (+ ui-smoke.mjs + .version) to this
+    # plugin version — leaving CI workflows, the pre-push hook, .claude/settings.json, and
+    # smoke.conf untouched. The propagation path for a gate fix: installed repos carry COPIES
+    # (frozen at install), so a plugin-side fix never reaches them without this. Idempotent.
+    --update) UPDATE=1 ;;
     -*) echo "install-gates: unknown flag '$a'" >&2; exit 1 ;;
     *)  REPO="$a" ;;
   esac
 done
-[ -n "$REPO" ] || { echo "usage: install-gates.sh <repo> [--dry-run] [--protect]" >&2; exit 1; }
+[ -n "$REPO" ] || { echo "usage: install-gates.sh <repo> [--update] [--dry-run] [--protect]" >&2; exit 1; }
 REPO="$(cd "$REPO" 2>/dev/null && pwd)" || { echo "install-gates: no such dir '$REPO'" >&2; exit 1; }
 [ -d "$REPO/.git" ] || { echo "install-gates: '$REPO' is not a git repo" >&2; exit 1; }
 
@@ -41,7 +48,7 @@ VERSION="$(jq -r '.version // "0.0.0"' "$PLUGIN_ROOT/.claude-plugin/plugin.json"
 note() { echo "  $*"; }
 act()  { if [ "$DRY" = 1 ]; then echo "  [dry-run] $1"; return 0; fi; return 1; }   # act "desc" && return-from-dry
 
-echo "Installing ShipIt V4 gates v$VERSION → $REPO$([ "$DRY" = 1 ] && echo '  (dry-run)')"
+echo "$([ "$UPDATE" = 1 ] && echo 'Updating' || echo 'Installing') ShipIt V4 gates v$VERSION → $REPO$([ "$DRY" = 1 ] && echo '  (dry-run)')"
 
 # 1. gate scripts → .shipit-gates/  (+ ui-smoke.mjs for the UI tier, + a default smoke.conf)
 if ! act "copy gates/*.{sh,mjs} → .shipit-gates/ (+ default smoke.conf)"; then
@@ -65,6 +72,13 @@ CONF
     note ".shipit-gates/smoke.conf present (kept)"
   fi
   note ".shipit-gates/ ✓ (gates + ui-smoke.mjs)"
+fi
+
+# --update stops here: scripts refreshed, everything else (CI workflows, pre-push hook,
+# .claude/settings.json, smoke.conf, branch protection) left exactly as the repo has it.
+if [ "$UPDATE" = 1 ]; then
+  echo "Done (update). Refreshed .shipit-gates/ scripts to v$VERSION — CI / settings / smoke.conf untouched. Review + commit in $REPO."
+  exit 0
 fi
 
 # 2. CI workflows (rewrite gates/ path → .shipit-gates/)
