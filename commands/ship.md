@@ -24,7 +24,16 @@ Run in order, on the current branch (never on `main`):
 
 5. **Open the PR.** `gh pr create --fill`. This triggers the **independent cross-model review** (`.github/workflows/independent-review.yml`) — a non-Claude model reviews your work because the author doesn't review its own. Read its findings; address any genuine MUST-FIX.
 
-6. **Report.** Which gates passed, what the review said, the PR link. If a gate is red, say so plainly — do not declare success.
+6. **Runtime smoke-test — once it deploys (green CI is NOT proof it works).** When a preview/prod URL exists, hit the *live* artifact, don't trust the build:
+   ```bash
+   SHIPIT_DEPLOY_URL="<preview-or-prod-url>" \
+   SHIPIT_SMOKE_PATHS="/,/api/health,<your critical routes>" \
+   SHIPIT_SMOKE_UI=1 \
+   bash gates/runtime-smoke-test.sh        # HTTP non-5xx + the page actually RENDERS (Playwright)
+   ```
+   This is the gate the 504 taught us we needed — a Hono catch-all passed build/test/deploy/review and still 504'd every route; only a live request caught it. For real user-flow coverage, point tier 3 at your suite: `SHIPIT_SMOKE_E2E_CMD="npx playwright test"` (or `cypress run` / `cucumber-js`) — it runs against the deploy. Override a genuine exception with `[no-smoke]`.
+
+7. **Report.** Which gates passed, what the review said, **the runtime smoke result**, the PR link. If a gate is red, say so plainly — do not declare success.
 
 ## The rule
 v3's gates were prose and got skipped. Here they're hooks + CI, so they fire whether or not `/ship` is called. `/ship` is the one-pass convenience — it does not *replace* the enforcement, and it never licenses skipping a red gate. Use an override token (`[no-docs]`, `[no-test]`) only for a genuine, conscious exception.
