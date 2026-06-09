@@ -160,7 +160,7 @@ stops accumulating "awaiting review" forever (the rot the improvement plan flagg
 
 ## 2026-06-09 — check/project
 
-**Status:** pending
+**Status:** applied — 2026-06-09 — gates/runtime-smoke-test.sh (path=NNN pinning + authed tier: SHIPIT_SMOKE_AUTH_TOKEN/_AUTH_PATHS/_AUTH_CMD) + ci-template; FocusBoard reference impl (focusboard PR #26)
 
 **Learning:** The runtime-smoke gate's ceiling is liveness/routing/auth, NOT data correctness — document this limit on the gate, and add the next rung: an OPTIONAL authenticated post-deploy smoke that, when a low-privilege test PAT is present as a CI secret, drives one idempotent round-trip (capture -> list shows it -> dismiss) and asserts the row comes back. Deploy-conditional + credential-conditional, mirroring [no-smoke].
 
@@ -176,7 +176,7 @@ stops accumulating "awaiting review" forever (the rot the improvement plan flagg
 
 ## 2026-06-09 — procedure/project
 
-**Status:** pending
+**Status:** applied — 2026-06-09 — commands/ship.md step 6 (hoist credential-gated acceptance to first-shippable + authed-tier pointer)
 
 **Learning:** Manual acceptance steps that gate CORRECTNESS must run before building on top of the surface, not as the closing step. When a real credential is the only thing blocking an e2e correctness check, /ship should surface the 1-minute manual step (or prompt to provision a test credential) at the point the surface is first shippable — not defer it to a final post-merge checklist item.
 

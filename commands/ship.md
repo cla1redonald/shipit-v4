@@ -33,6 +33,10 @@ Run in order, on the current branch (never on `main`):
    ```
    This is the gate the 504 taught us we needed — a Hono catch-all passed build/test/deploy/review and still 504'd every route; only a live request caught it. For real user-flow coverage, point tier 3 at your suite: `SHIPIT_SMOKE_E2E_CMD="npx playwright test"` (or `cypress run` / `cucumber-js`) — it runs against the deploy. Override a genuine exception with `[no-smoke]`.
 
+   **The smoke tiers prove liveness/routing/auth, NOT data correctness** — wrong rows returned to an authenticated caller pass every unauth check (FocusBoard's inbox status-filter bug). When the surface has authenticated reads, wire the authed tier: a low-privilege test token as a CI secret (`SHIPIT_SMOKE_AUTH_TOKEN`) + `SHIPIT_SMOKE_AUTH_PATHS`/`SHIPIT_SMOKE_AUTH_CMD` in `smoke.conf`.
+
+   **Hoist credential-gated acceptance checks to FIRST-shippable, not last.** If an acceptance criterion needs a real credential the session doesn't hold (a user's API token, a login), surface the 1-minute manual step — or get a test credential provisioned — at the moment the surface first works, BEFORE building the next layer on top. FocusBoard Phase 1 deferred "capture appears in the inbox, live" to a closing checklist item; it caught a real bug, but only post-merge, forcing a follow-up fix against shipped code. The cheapest correctness gate (a human with a real token, 60 seconds) must not be scheduled last.
+
 7. **Report.** Which gates passed, what the review said, **the runtime smoke result**, the PR link. If a gate is red, say so plainly — do not declare success.
 
 ## The rule
