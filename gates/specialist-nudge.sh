@@ -32,8 +32,12 @@ if printf '%s\n' "$staged" | grep -q 'package\.json$'; then
     arch="${arch}"$'\n'"package.json (new dependency)"
   fi
 fi
-# UI surfaces: components, TSX/JSX, CSS/SCSS (Tailwind), pages/routes.
-ui="$(printf '%s\n' "$staged" | grep -Ei '(^|/)components/|\.(tsx|jsx)$|\.(css|scss)$|(^|/)(pages|app)/' || true)"
+# UI surfaces: components, TSX/JSX, CSS/SCSS (Tailwind). NOTE: we deliberately do NOT match a
+# bare `pages/`/`app/` directory — in a Next.js App Router repo, API routes ALSO live under
+# `app/` (e.g. app/api/x/route.ts), so a dir match fires @designer on pure API routes (a real
+# false positive found battle-testing ProveIt). A UI page is a `.tsx`/`.jsx` (caught below); a
+# `route.ts` is an API file → it stays @architect-only via the `api/` match above.
+ui="$(printf '%s\n' "$staged" | grep -Ei '(^|/)components/|\.(tsx|jsx)$|\.(css|scss)$' || true)"
 
 if [ -n "$arch" ]; then
   echo "specialist nudge: staged changes touch an architectural surface (migrations / *.sql / api/ / new deps) — summon @architect to review the design before shipping (best done at PLAN time, not just pre-merge)." >&2
