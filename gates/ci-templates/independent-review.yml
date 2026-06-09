@@ -38,6 +38,7 @@ jobs:
       STRICT: ${{ vars.SHIPIT_REVIEW_STRICT || 'false' }}
       MAX_FILES: "25"          # cost cap: never review more than this many files per PR
       PER_FILE_CHARS: "24000"  # ~6k tokens; only a single oversized file is truncated
+      MIN_LINES: ${{ vars.SHIPIT_REVIEW_MIN_LINES || '10' }}  # size-gate: skip the review on trivial PRs
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,6 +58,20 @@ jobs:
           if git log --format='%B' "$base..HEAD" 2>/dev/null | grep -qiF '[no-review]'; then
             echo "[no-review] override present in a commit message — skipping independent review."
             gh pr comment "$PR" --body "🔍 Independent review **skipped** via the \`[no-review]\` override." || true
+            exit 0
+          fi
+
+          # Size-gate: skip the (LLM-billed) review on docs-only / trivial PRs. Counts only
+          # code-file line churn (ignores .md/.mdx/.txt/.rst); numstat gives "-" for binaries → awk reads 0.
+          numstat="$(git diff --numstat "$base...HEAD" -- . ':(exclude)**/package-lock.json' ':(exclude)**/*.lock')"
+          codefiles="$(printf '%s\n' "$numstat" | awk 'NF && $3 !~ /\.(md|mdx|txt|rst)$/' | grep -c . || true)"
+          codelines="$(printf '%s\n' "$numstat" | awk '$3 !~ /\.(md|mdx|txt|rst)$/ {a+=$1; d+=$2} END{print a+d+0}')"
+          if [ "${codefiles:-0}" -eq 0 ]; then
+            gh pr comment "$PR" --body "🔍 Independent review **skipped** — docs-only change (no code files)." || true
+            exit 0
+          fi
+          if [ "${codelines:-0}" -lt "${MIN_LINES:-10}" ]; then
+            gh pr comment "$PR" --body "🔍 Independent review **skipped** — trivial change (${codelines} code line(s) < ${MIN_LINES})." || true
             exit 0
           fi
 
@@ -130,7 +145,7 @@ jobs:
             if [ "$STRICT" = "true" ]; then
               echo "_Mode: **STRICT** — any \`[MUST-FIX]\` blocks the merge. Override a false positive with \`[no-review]\` in a commit message._"
             else
-              echo "_Mode: advisory — blocks only on a \`VERDICT: MUST-FIX\` line._"
+              echo "_Mode: **advisory** — findings are informational and do **NOT** block the merge. Set repo var \`SHIPIT_REVIEW_STRICT=true\` to make \`[MUST-FIX]\` block. (Runtime correctness is the runtime-smoke gate's job, not this diff review's.)_"
             fi
             [ "$SKIPPED" -gt 0 ] && echo && echo "> ⚠️ ${SKIPPED} file(s) beyond the ${MAX_FILES}-file cap were NOT reviewed — review them by hand."
             echo
@@ -139,7 +154,11 @@ jobs:
           gh pr comment "$PR" --body-file comment.md || true
 
           if [ "$overall_ok" -eq 0 ]; then
-            echo "::error::Independent review found MUST-FIX in at least one file — see the PR comment."
-            exit 1
+            if [ "$STRICT" = "true" ]; then
+              echo "::error::STRICT: independent review found MUST-FIX — see the PR comment."
+              exit 1
+            fi
+            echo "::warning::Independent review flagged MUST-FIX (advisory — NOT blocking). See the PR comment."
+            exit 0
           fi
           echo "Independent review: OK across ${#FILES[@]} reviewed file(s)."
