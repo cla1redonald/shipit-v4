@@ -27,7 +27,7 @@
 
 set -uo pipefail
 
-TYPE="" SCOPE="" REVIEW="" STATEMENT="" RATIONALE="" REPO="" SLUG_ARG=""
+TYPE="" SCOPE="" REVIEW="" STATEMENT="" RATIONALE="" REPO="" SLUG_ARG="" ACTION_MATCH="" SURFACE_MATCH=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -38,6 +38,11 @@ while [ $# -gt 0 ]; do
     --rationale) RATIONALE="${2:-}"; shift 2 ;;
     --repo)      REPO="${2:-}"; shift 2 ;;
     --slug)      SLUG_ARG="${2:-}"; shift 2 ;;   # optional explicit short filename slug
+    # P5b loop-fired signal (both optional): a grep -E pattern for the rule's distinctive
+    # ACTION (→ "the rule fired", matched free by the tripwire) and its SURFACE/precondition
+    # (→ "the situation arose", the dead-letter denominator). Empty for pure-judgment rules.
+    --action-match)  ACTION_MATCH="${2:-}"; shift 2 ;;
+    --surface-match) SURFACE_MATCH="${2:-}"; shift 2 ;;
     *) echo "route-learning: unknown arg '$1'" >&2; exit 1 ;;
   esac
 done
@@ -73,6 +78,9 @@ fi
 
 DATE="$(date +%Y-%m-%d)"
 SLUG="${SLUG_ARG:-}"; [ -n "$SLUG" ] || SLUG="$(slugify "$STATEMENT")"; [ -n "$SLUG" ] || SLUG="learning-$DATE"
+# SIG = the stable registry/event key (always slugify(statement), independent of a custom
+# --slug filename). The rule tag, the registry row, and `note-applied <sig>` all use this.
+SIG="$(slugify "$STATEMENT")"; [ -n "$SIG" ] || SIG="$SLUG"
 
 # --- propose: append a ready-to-apply entry, touch nothing global ---------
 if [ "$REVIEW" = "propose" ]; then
@@ -110,7 +118,10 @@ case "$TYPE" in
     if ! grep -q '^## Learnings' "$OUT" 2>/dev/null; then
       printf '\n## Learnings\n\nDurable, auto-loaded rules captured by the @retro learning loop.\n' >> "$OUT"
     fi
-    printf -- '\n- **%s** — %s _(retro %s)_\n' "$STATEMENT" "$RATIONALE" "$DATE" >> "$OUT"
+    # The slug travels WITH the rule (P5b) so, when you apply it, you have the id to log a
+    # fire with `note-applied.sh <slug>` (the fallback signal for judgment rules that have no
+    # code-checkable ACTION_MATCH for the tripwire to catch for free).
+    printf -- '\n- **%s** — %s _(retro %s · learning:%s)_\n' "$STATEMENT" "$RATIONALE" "$DATE" "$SIG" >> "$OUT"
     echo "ROUTED → $OUT  (project rule, auto-loads)"
     ;;
   fact)
@@ -159,11 +170,15 @@ esac
 # Record each project learning in a global index keyed by a signature; when the
 # same signature appears for a 2nd DISTINCT repo, PROPOSE promoting it to user
 # scope (never auto-promote — user scope is always propose).
-SIG="$(slugify "$STATEMENT")"
 IDXDIR="${SHIPIT_RETRO_DIR:-$HOME/.claude/shipit-retro}"; mkdir -p "$IDXDIR"
 LIDX="$IDXDIR/learning-index.tsv"
+# v2 registry (P5b): write-once per (SIG,REPO). The fire/opportunity COUNTS are NOT stored
+# here — they live in an append-only event log (learning-events.tsv) and are aggregated at
+# read time by learning-audit.sh. That keeps this registry immutable, so concurrent sessions
+# never race-mutate it (MANDATORY #6). Columns: SIG REPO DATE TYPE ACTION_MATCH SURFACE_MATCH.
+[ -f "$LIDX" ] || printf '# learning-index v2\tSIG\tREPO\tDATE\tTYPE\tACTION_MATCH\tSURFACE_MATCH\n' > "$LIDX"
 if ! grep -qF "$(printf '%s\t%s' "$SIG" "$REPO")" "$LIDX" 2>/dev/null; then
-  printf '%s\t%s\t%s\t%s\n' "$SIG" "$REPO" "$DATE" "$TYPE" >> "$LIDX"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$SIG" "$REPO" "$DATE" "$TYPE" "${ACTION_MATCH:--}" "${SURFACE_MATCH:--}" >> "$LIDX"
 fi
 repos="$(awk -F'\t' -v s="$SIG" '$1==s {print $2}' "$LIDX" 2>/dev/null | sort -u)"
 nrepos="$(printf '%s\n' "$repos" | grep -c .)"

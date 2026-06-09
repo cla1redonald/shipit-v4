@@ -47,6 +47,36 @@ slice="$(sed -n "$((last + 1)),${total}p" "$transcript" 2>/dev/null || true)"
 printf '%s' "$total" > "$cursor_file"
 [ -n "$slice" ] || exit 0
 
+# ── P5b: loop-fired detection (free, no LLM, no agent compliance) ──────────────
+# For each routed learning that carries a distinctive ACTION pattern (→ "the rule fired")
+# and/or a SURFACE pattern (→ "the situation arose"), grep this turn's tool stream and
+# append events to an APPEND-ONLY log. Single-line O_APPEND writes are race-safe across the
+# concurrent sessions MANDATORY #6 warns about — we never mutate a shared file in place.
+# Counts are derived later by learning-audit.sh. This is the ONLY signal that can prove a
+# rule fired *unprompted* (self-report via note-applied.sh is the judgment-rule fallback).
+# A no-op until learnings exist (guarded on the registry), so zero cost in the common case.
+reg="$MARKER_DIR/learning-index.tsv"
+if [ -f "$reg" ]; then
+  events="$MARKER_DIR/learning-events.tsv"
+  fired="$MARKER_DIR/$session.fired"           # per-session dedup → 1 fire/opp per (session,sig)
+  ets="$(date '+%Y-%m-%dT%H:%M:%S')"
+  while IFS="$(printf '\t')" read -r sig _repo _date _type amatch smatch; do
+    case "$sig" in '#'*|'') continue ;; esac
+    if [ -n "${amatch:-}" ] && [ "$amatch" != "-" ] \
+         && printf '%s' "$slice" | grep -Eiq -- "$amatch" 2>/dev/null \
+         && ! grep -qxF "fire:$sig" "$fired" 2>/dev/null; then
+      printf '%s\tfire\t%s\ttripwire\tsession=%s\n' "$ets" "$sig" "$session" >> "$events"
+      echo "fire:$sig" >> "$fired"
+    fi
+    if [ -n "${smatch:-}" ] && [ "$smatch" != "-" ] \
+         && printf '%s' "$slice" | grep -Eiq -- "$smatch" 2>/dev/null \
+         && ! grep -qxF "opp:$sig" "$fired" 2>/dev/null; then
+      printf '%s\topp\t%s\ttripwire\tsession=%s\n' "$ets" "$sig" "$session" >> "$events"
+      echo "opp:$sig" >> "$fired"
+    fi
+  done < "$reg"
+fi
+
 signals=""
 add() { signals="${signals:+$signals,}$1"; }
 

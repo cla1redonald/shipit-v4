@@ -77,6 +77,7 @@ Usage across all transcripts (subagent invocations): `reviewer 29 · retro 29 ·
 ### Honest limits (kept on the table, not hidden)
 - **Sincerity can't be fully enforced** — a model can write specific-looking-but-shallow rationale. Mitigation: require concrete references (the actual learning, the actual cross-repo comparison); verifier flags generic boilerplate. Enforced *to the degree the reasoning is checkable.*
 - **The sweep is a net, not a guarantee** — retrospective transcript review still misses subtle things and surfaces some noise.
+- **"Did it fire?" — plumbing test ≠ claim validation (P5b).** The loop-fired verifier (`learning-audit.sh`) closes the verification gap V4 had left *assumed*. But be precise about what it proves: the closed-loop route→apply→FIRES=1 test only proves the **plumbing** (events recorded, counts derived). The actual claim — *a rule fires unprompted in a later session* — is validated **only observationally**: the free `action-match` tripwire signal accruing across real sessions while nobody consciously logs it. Self-report (`note-applied`) can't produce that evidence by construction (it requires conscious action), which is exactly why the action-match tier matters. And a learning with **no** signal can't be distinguished from "great rule that fires silently" — the action-match tier shrinks that set; it doesn't eliminate it.
 
 ---
 
