@@ -71,6 +71,7 @@ description: Produce an implementation plan from a spec or description. Files to
 - [ ] All steps have concrete file paths
 - [ ] Dependencies documented
 - [ ] Risks identified with mitigations
+- [ ] If the plan touches an **architectural surface** (data model, schema, API boundary, a new external integration, a new dependency), **`@architect` summoned to review the design** before implementation begins — PLAN time is the architect's highest-value moment (the wild run's best ROI). ShipIt's `specialist-nudge` also flags this when a `docs/plans/*.md` / PRD is staged, but here is earlier and better.
 - [ ] User has reviewed and approved
 - [ ] Gameplan committed to git
 
