@@ -61,6 +61,7 @@ description: Capture requirements, constraints, and success criteria for a featu
 - [ ] Spec file exists at `docs/specs/<slug>.md`
 - [ ] All sections filled (What, Why, Success Criteria, Constraints, Out of Scope)
 - [ ] Success criteria are checkable (not vague)
+- [ ] If the feature touches an **architectural surface** (data model, API boundary, a new external integration/dependency), note that **`@architect` should review at `/gameplan` time** — flag it in Constraints so the design gets specialist review before building, not after.
 - [ ] User has reviewed and approved
 - [ ] Spec committed to git
 

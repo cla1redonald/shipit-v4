@@ -54,10 +54,11 @@ The best ROI of the first run was implicit and manual (you had to remember to su
 
 | Staged surface | Nudges you to summon |
 |---|---|
-| `migrations/`, `*.sql`, `schema.*`, `api/`, a new `package.json` dependency | **`@architect`** |
+| **`docs/plans/*.md`, `ARCHITECTURE.md`, `*prd*.md`** (PLAN TIME) | **`@architect`** — review the *design* before building |
+| `migrations/`, `*.sql`, `schema.*`, `api/`, a new `package.json` dependency (commit-time backstop) | **`@architect`** |
 | `components/`, `*.tsx` / `*.jsx`, `*.css` / `*.scss` (a Next.js page is a `.tsx`; a `route.ts` is an API file → `@architect`, not here) | **`@designer`** |
 
-The architect's highest-value moment is at **PLAN time** (summon before building, not just before merging) — the commit-time nudge is the backstop for when that didn't happen. Installed per-repo by `install-gates.sh` (copies the script into `.shipit-gates/`, jq-merges the hook into `.claude/settings.json`).
+The architect's highest-value moment is at **PLAN time** (summon before building, not just before merging). P5e wires that in two places: the nudge fires a distinct PLAN-TIME message when a plan/PRD/architecture doc is staged, and `/spec` + `/gameplan` carry an exit-criteria item to summon `@architect` for any architectural surface *before* implementation. The commit-time code-surface nudge is the backstop for when that didn't happen. Installed per-repo by `install-gates.sh` (copies the script into `.shipit-gates/`, jq-merges the hook into `.claude/settings.json`).
 
 ## Routing — the rule that makes it worth doing
 
