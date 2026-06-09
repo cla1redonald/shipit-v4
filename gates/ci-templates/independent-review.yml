@@ -113,9 +113,12 @@ jobs:
             if printf '%s\n' "$content" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then
               overall_ok=0
             fi
-            # Strict mode: also trip on a [MUST-FIX] FINDING tag — one that LEADS a line
-            # (after list/heading markers), NOT a prose mention like "no [MUST-FIX] issues".
-            if [ "$STRICT" = "true" ] && printf '%s\n' "$content" | grep -qiE '^[[:space:]]*[-*#>0-9.)( ]*\[MUST-FIX\]'; then
+            # Strict mode: also trip on a [MUST-FIX] FINDING tag that LEADS a list item —
+            # NOT a prose mention ("no [MUST-FIX] issues") and NOT a section HEADING
+            # ("## [MUST-FIX] Issues", which the reviewer emits even when it then says "None
+            # found"). So the lead class is list markers only (no '#'); a real must-fix under a
+            # heading still trips the VERDICT: MUST-FIX line above, which is the true backstop.
+            if [ "$STRICT" = "true" ] && printf '%s\n' "$content" | grep -qiE '^[[:space:]]*[-*>0-9.)( ]*\[MUST-FIX\]'; then
               overall_ok=0
             fi
           done
@@ -136,7 +139,7 @@ jobs:
             xcontent="$(printf '%s' "$xresp" | jq -r '.choices[0].message.content // .error.message // "(no response)"' 2>/dev/null)"
             { echo "### 🔗 Cross-file interactions"; echo "$xcontent"; echo; } >> findings.md
             if printf '%s\n' "$xcontent" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then overall_ok=0; fi
-            if [ "$STRICT" = "true" ] && printf '%s\n' "$xcontent" | grep -qiE '^[[:space:]]*[-*#>0-9.)( ]*\[MUST-FIX\]'; then overall_ok=0; fi
+            if [ "$STRICT" = "true" ] && printf '%s\n' "$xcontent" | grep -qiE '^[[:space:]]*[-*>0-9.)( ]*\[MUST-FIX\]'; then overall_ok=0; fi
           fi
 
           {
