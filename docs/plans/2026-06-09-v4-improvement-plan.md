@@ -44,7 +44,8 @@ It's a signal, not a gate. The evidence: repeated false positives + a green pass
 ## Status (2026-06-09)
 - ✅ **P1 shipped** (PR #11): `runtime-smoke.yml` auto-fires on `deployment_status` (live URL via `environment_url`, zero config); `install-gates.sh` copies `ui-smoke.mjs` + seeds `.shipit-gates/smoke.conf`.
 - ✅ **P2 shipped** (PR #11): cross-model review is **fully advisory** (never blocks; `SHIPIT_REVIEW_STRICT` opt-in keeps teeth) + size-gated (`SHIPIT_REVIEW_MIN_LINES`, default 10). The strict-mode prose-grep bug was already fixed.
-- ⏭️ **P3 next** — spec below. **P4** still open (battle-test on 2–3 repos; the FocusBoard runtime-smoke wiring is the first real customer).
+- ✅ **P3 shipped**: `gates/specialist-nudge.sh` (commit-time PreToolUse, non-blocking) nudges `@architect` on architectural surfaces (migrations / `*.sql` / `schema.*` / `api/` / new `package.json` deps) and `@designer` on UI surfaces (components / `*.tsx`·`*.jsx` / `*.css`·`*.scss` / pages·routes). Ships `agents/architect.md` + `agents/designer.md` (team-mode coupling trimmed, like `reviewer.md`). Wired into `install-gates.sh` (idempotent jq-merge into `.claude/settings.json` PreToolUse, mirroring docs-sync). `CLAUDE.md` carries the trigger→`@agent` map + the "summon at PLAN time" note.
+- ⏭️ **P4** still open (battle-test on 2–3 repos; the FocusBoard runtime-smoke wiring is the first real customer).
 
 ## P3 — implementation spec (agreed: make the @agent summon fire by itself)
 **Decision:** the specialists already ARE `@agents` (`@architect`, `@designer`, `@reviewer` in `~/.claude/agents/`; ShipIt ships its own `reviewer`). So P3 is NOT a new skill and NOT a new agent — it's the missing half: a **nudge that summons the existing @agent at the right moment**, in the same family as `gates/docs-sync-reminder.sh` and `gates/retro-sweep-nudge.sh` (read those two first — they are the template).

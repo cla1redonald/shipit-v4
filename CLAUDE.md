@@ -42,10 +42,21 @@ Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:**
 
 V4 shed the orchestration *framework* but kept the few things people actually reached for, as **on-demand, composable subagents** (summon ad hoc — not a first-class roster) and **standalone skills**. For multi-agent builds, use native **dynamic workflows / agent teams**, not a roster.
 
-- **Agents** (`agents/`): `retro` (the loop) · `reviewer` · `docs` · `engineer` · `researcher`.
+- **Agents** (`agents/`): `retro` (the loop) · `reviewer` · `docs` · `engineer` · `researcher` · `architect` · `designer`.
 - **Skills** (`commands/`): `/spec` · `/gameplan` · `/prd-review` · `/code-review` · `/tdd-build` · `/ship` · `/retro`.
 
-Ported from v3 with the orchestration/team-mode coupling trimmed (no `/orchestrate`, no `MODE: team`). V4 deliberately does **not** ship the barely-used v3 roster (architect, pm, designer, devsecops, qa, strategist, orchestrator) — summon a specialist ad hoc if a build genuinely needs one.
+Ported from v3 with the orchestration/team-mode coupling trimmed (no `/orchestrate`, no `MODE: team`). The first wild run showed the **ad-hoc specialist summon** was the single highest-value output of the session (the architect caught a half-aspirational API boundary at plan time), so V4 ships `architect` + `designer` alongside `reviewer` and fires them by themselves via the **specialist-nudge** (below). The rest of the v3 roster (pm, devsecops, qa, strategist, orchestrator) is still **not** shipped — summon one ad hoc if a build genuinely needs it.
+
+### Specialist-nudge — summon the right @agent by itself
+
+The best ROI of the first run was implicit and manual (you had to remember to summon the architect). `gates/specialist-nudge.sh` makes it fire on its own: a non-blocking PreToolUse(Bash) reminder (same family as `docs-sync-reminder.sh` / `retro-sweep-nudge.sh`) that, on a `git commit`, inspects the **staged** diff and nudges you to summon the matching specialist. It never blocks (exit 0) and spawns no LLM — it just points at a real, installed agent.
+
+| Staged surface | Nudges you to summon |
+|---|---|
+| `migrations/`, `*.sql`, `schema.*`, `api/`, a new `package.json` dependency | **`@architect`** |
+| `components/`, `*.tsx` / `*.jsx`, `*.css` / `*.scss`, `pages/` / `app/` routes | **`@designer`** |
+
+The architect's highest-value moment is at **PLAN time** (summon before building, not just before merging) — the commit-time nudge is the backstop for when that didn't happen. Installed per-repo by `install-gates.sh` (copies the script into `.shipit-gates/`, jq-merges the hook into `.claude/settings.json`).
 
 ## Routing — the rule that makes it worth doing
 

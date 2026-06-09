@@ -11,7 +11,8 @@
 #   <repo>/.github/workflows/     ci.yml + docs-check.yml + independent-review.yml + runtime-smoke.yml
 #                                 (paths rewritten gates/ → .shipit-gates/)
 #   <repo>/.git/hooks/pre-push    → runs .shipit-gates/pre-push-checks.sh
-#   <repo>/.claude/settings.json  PreToolUse docs-sync commit reminder (jq-merged, idempotent)
+#   <repo>/.claude/settings.json  PreToolUse commit reminders — docs-sync + specialist-nudge
+#                                 (@architect/@designer summon) (jq-merged, idempotent)
 #
 # After install, edit <repo>/.shipit-gates/smoke.conf with the repo's critical routes so the
 # runtime-smoke workflow (fires on deployment_status) checks the live deploy, not just CI.
@@ -109,6 +110,29 @@ if ! act "merge docs-sync reminder → .claude/settings.json"; then
       mv "$tmp" "$SET"; note ".claude/settings.json reminder added ✓"
     else
       rm -f "$tmp"; echo "  ! could not merge $SET (invalid JSON?) — add the reminder by hand" >&2
+    fi
+  fi
+fi
+
+# 4b. specialist-nudge commit reminder → .claude/settings.json (idempotent jq merge)
+#     Nudges you to summon @architect (migrations/*.sql/api/new deps) or @designer
+#     (components/*.tsx/*.css) when staged changes touch those surfaces. Never blocks.
+if ! act "merge specialist-nudge → .claude/settings.json"; then
+  mkdir -p "$REPO/.claude"
+  [ -f "$SET" ] || echo '{}' > "$SET"
+  if grep -q 'specialist-nudge' "$SET" 2>/dev/null; then
+    note ".claude/settings.json specialist-nudge already present ✓ (idempotent)"
+  else
+    cmd='bash "$(git rev-parse --show-toplevel)/.shipit-gates/specialist-nudge.sh"'
+    tmp="$(mktemp)"
+    if jq --arg cmd "$cmd" '
+          .hooks //= {} |
+          .hooks.PreToolUse //= [] |
+          .hooks.PreToolUse += [ { "matcher":"Bash", "hooks":[ { "type":"command", "command":$cmd, "timeout":5 } ] } ]
+        ' "$SET" > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$SET"; note ".claude/settings.json specialist-nudge added ✓"
+    else
+      rm -f "$tmp"; echo "  ! could not merge $SET (invalid JSON?) — add the specialist-nudge by hand" >&2
     fi
   fi
 fi

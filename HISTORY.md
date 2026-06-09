@@ -39,6 +39,7 @@ V4 keeps and *hardens* exactly those two things:
 ## What got dropped
 
 - `/orchestrate`, `shipit-parallel`, and the ~7 barely-used agents as a *roster*. For multi-agent builds, use native **dynamic workflows / agent teams**.
+  - *(P3 amendment, Jun 2026)* The first wild run showed the **ad-hoc specialist summon** was the single highest-value output of the session, so `architect` + `designer` were re-shipped — not as a roster, but as on-demand agents fired by themselves via `gates/specialist-nudge.sh` (commit-time, non-blocking; nudges `@architect` on migrations/`*.sql`/`api/`/new deps, `@designer` on components/`*.tsx`/`*.css`). Still dropped: pm, devsecops, qa, strategist, orchestrator.
 
 ## Reference implementation
 
