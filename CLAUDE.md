@@ -21,6 +21,8 @@ Two capture paths, one shared core. **Model judges, code enforces.**
 | `hooks/retro-tripwire.sh` | the tripwire — free, every `Stop`, over-flags on purpose; **also emits loop-fired events (P5b)** |
 | `scripts/note-applied.sh` | record a fire for a JUDGMENT rule (the fallback signal; action rules fire for free) |
 | `scripts/learning-audit.sh` | read-time view of the loop-fired signal — `--fired`, `--dead-letters`, `--list` |
+| `hooks/retro-sweep-session-end.sh` | autonomous trigger (opt-in) — fires the sweep at `SessionEnd`; all guards, no LLM itself |
+| `scripts/run-sweep.sh` | the autonomous sweep worker — Haiku (no tools) judges, code routes; capped + recursion-guarded |
 | `commands/retro.md` | the `/retro` entry point (Path A and Path B) |
 
 ### Did the learning actually fire? (P5b — the loop-fired verifier)
@@ -83,7 +85,11 @@ A learning only counts if it **fires by itself next time**. Route to an auto-loa
 
 ## Cost discipline (applies to V4 itself)
 
-The sweep is recurring spend → Haiku, bounded, obeys `MANDATORY.md` rule #1: **estimate before any scheduled/recurring run.** The tripwire is free (bash, no LLM) by design — that split is deliberate. The **autonomous trigger** is cost-safe by construction: `gates/retro-sweep-nudge.sh` (a PostToolUse-on-`git commit` hook, no LLM) just *nudges* you to run `/retro` once the session's markers cross a threshold (`SHIPIT_SWEEP_THRESHOLD`, default 5). It **never spawns an LLM job** — the paid sweep stays you-triggered, on your Max plan. A truly-unattended cron is deliberately NOT shipped (the $24 lesson).
+The sweep is recurring spend → Haiku, bounded, obeys `MANDATORY.md` rule #1: **estimate before any scheduled/recurring run.** The tripwire is free (bash, no LLM) by design — that split is deliberate.
+
+Two triggers, both cost-safe:
+- **Nudge (default).** `gates/retro-sweep-nudge.sh` (PostToolUse-on-`git commit`, no LLM) *nudges* you to run `/retro` once the session's markers cross `SHIPIT_SWEEP_THRESHOLD` (default 5). Never spawns an LLM — the paid sweep stays you-triggered.
+- **Autonomous session-end (opt-in, P-hands-off).** `hooks/retro-sweep-session-end.sh` + `scripts/run-sweep.sh` run the sweep **by themselves when a session ends** — *only* when `~/.claude/shipit-retro/auto-sweep` says `session-end` (no file → off; `rm` it or `SHIPIT_AUTO_SWEEP=off` to disable). Originally deferred (the $24 lesson); shipped on **Claire's explicit approval (2026-06-09)** with hard caps that keep rule #1 satisfied: **zero spend on idle** (exits before any LLM call if no markers), **Haiku only**, **≤ `SHIPIT_SWEEP_MAX` (20) candidates/sweep**, **recursion-guarded** (`SHIPIT_IN_SWEEP`), **detached** (never blocks exit), and — crucially — the **model gets NO tools**: it reads candidates as text and returns `@KEEP` blocks (model judges); `run-sweep.sh` parses them and runs `route-learning.sh` (code enforces — user-scope/enforcement still go to `PROPOSED-LEARNINGS.md`, never auto-applied). Worst-case ≈ $2–4/mo on API pricing; on a Max-authed `claude` it draws subscription quota instead. **Note:** project-scope learnings are auto-written to `<repo>/CLAUDE.md` (visible in `git status`, reversible) — only user/enforcement are gated behind your review.
 
 ## Keeping docs in sync with code
 
