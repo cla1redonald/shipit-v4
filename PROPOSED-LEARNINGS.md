@@ -58,3 +58,45 @@ Review each, then apply by hand (or via PR) to the named target.
 ```
 - **Vercel/Hono reference facts: Hobby plan caps at 12 serverless functions per deployment (Fluid Compute does NOT change the count); the fix is one router function per app (a Hono catch-all at api/[...path].ts); hono/vercel handle() 504s on the Node runtime and needs a (req,res)->app.fetch() adapter.** — These platform facts caused and resolved the FocusBoard incident: the 12-function cap forced the catch-all consolidation; handle()-on-Node was the 504 root cause. Cheap to record, expensive to rediscover. Universal Vercel/Hono knowledge -> ~/.claude/CLAUDE.md.
 ```
+
+## 2026-06-09 — procedure/project
+
+**Learning:** ShipIt's cross-model review is a signal, not a gate: demote it to advisory (off the required-check/branch-protection path), document that it catches diff-level issues (logic/contracts/naming) NOT runtime correctness, replace the prose-grep verdict parser with structured VERDICT parsing, and size-gate it off trivial PRs.
+
+**Why:** In the wild it took ~7 calibration rounds, shipped real bugs (strict-mode matched 'no [MUST-FIX]' prose), and passed GREEN on the FocusBoard PR that 504'd every route. No diff review catches a runtime bug — it was oversold as the headline gate.
+
+**Apply to:** `<repo> (review placement)`
+
+**Ready-to-apply snippet:**
+
+```
+- **ShipIt's cross-model review is a signal, not a gate: demote it to advisory (off the required-check/branch-protection path), document that it catches diff-level issues (logic/contracts/naming) NOT runtime correctness, replace the prose-grep verdict parser with structured VERDICT parsing, and size-gate it off trivial PRs.** — In the wild it took ~7 calibration rounds, shipped real bugs (strict-mode matched 'no [MUST-FIX]' prose), and passed GREEN on the FocusBoard PR that 504'd every route. No diff review catches a runtime bug — it was oversold as the headline gate.
+```
+
+## 2026-06-09 — check/project
+
+**Learning:** Finish wiring the runtime-smoke gate so it fires by itself: into install-gates.sh + ci-templates/ci.yml (not just /ship prose), with automatic deploy-URL discovery from Vercel/CI output instead of manual SHIPIT_DEPLOY_URL.
+
+**Why:** The runtime-verification gap was V4's real blind spot — every gate green on a dead 504 deploy. The new gate patches it but only runs when a human runs /ship; 'runs by itself' is the V4 thesis.
+
+**Apply to:** `repo CI + project hook (<repo>/hooks/)`
+
+**Ready-to-apply snippet:**
+
+```
+- **Finish wiring the runtime-smoke gate so it fires by itself: into install-gates.sh + ci-templates/ci.yml (not just /ship prose), with automatic deploy-URL discovery from Vercel/CI output instead of manual SHIPIT_DEPLOY_URL.** — The runtime-verification gap was V4's real blind spot — every gate green on a dead 504 deploy. The new gate patches it but only runs when a human runs /ship; 'runs by itself' is the V4 thesis.
+```
+
+## 2026-06-09 — procedure/project
+
+**Learning:** Make ad-hoc specialist summon (architect/designer) a first-class documented ShipIt pattern: summon the architect for any PR touching architecture/data-model/a new external boundary; the designer for user-facing surfaces.
+
+**Why:** It was the single highest-value output of the session (the architect review prevented a bad FocusBoard build) yet is currently implicit/manual. The cheap parts carried V4; promote them.
+
+**Apply to:** `<repo> (review placement)`
+
+**Ready-to-apply snippet:**
+
+```
+- **Make ad-hoc specialist summon (architect/designer) a first-class documented ShipIt pattern: summon the architect for any PR touching architecture/data-model/a new external boundary; the designer for user-facing surfaces.** — It was the single highest-value output of the session (the architect review prevented a bad FocusBoard build) yet is currently implicit/manual. The cheap parts carried V4; promote them.
+```
