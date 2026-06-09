@@ -24,7 +24,7 @@ Run in order, on the current branch (never on `main`):
 
 5. **Open the PR.** `gh pr create --fill`. This triggers the **independent cross-model review** (`.github/workflows/independent-review.yml`) — a non-Claude model reviews your work because the author doesn't review its own. Read its findings; address any genuine MUST-FIX.
 
-6. **Runtime smoke-test — once it deploys (green CI is NOT proof it works).** When a preview/prod URL exists, hit the *live* artifact, don't trust the build:
+6. **Runtime smoke-test — once it deploys (green CI is NOT proof it works).** Once gates are installed this **fires automatically in CI** (`runtime-smoke.yml`, on GitHub's `deployment_status` event — reads routes from `.shipit-gates/smoke.conf`), so you usually just read its result. To run it locally / on-demand when a preview-or-prod URL exists, hit the *live* artifact directly:
    ```bash
    SHIPIT_DEPLOY_URL="<preview-or-prod-url>" \
    SHIPIT_SMOKE_PATHS="/,/api/health,<your critical routes>" \

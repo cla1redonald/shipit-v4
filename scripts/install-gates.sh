@@ -7,10 +7,14 @@
 #   --protect   also enable branch protection on main via gh (needs repo admin)
 #
 # Installs (copy + version stamp — stable if the plugin moves; drift is detectable):
-#   <repo>/.shipit-gates/         copies of the gate scripts + .version
-#   <repo>/.github/workflows/     ci.yml + docs-check.yml (paths rewritten to .shipit-gates/)
+#   <repo>/.shipit-gates/         gate scripts (*.sh) + ui-smoke.mjs + .version + a default smoke.conf
+#   <repo>/.github/workflows/     ci.yml + docs-check.yml + independent-review.yml + runtime-smoke.yml
+#                                 (paths rewritten gates/ → .shipit-gates/)
 #   <repo>/.git/hooks/pre-push    → runs .shipit-gates/pre-push-checks.sh
 #   <repo>/.claude/settings.json  PreToolUse docs-sync commit reminder (jq-merged, idempotent)
+#
+# After install, edit <repo>/.shipit-gates/smoke.conf with the repo's critical routes so the
+# runtime-smoke workflow (fires on deployment_status) checks the live deploy, not just CI.
 #
 # The global guards (no-push-to-main, secrets, sensitive-paths) need NO install — they
 # fire from the plugin's hooks.json in every session. This installer is only the
@@ -38,13 +42,28 @@ act()  { if [ "$DRY" = 1 ]; then echo "  [dry-run] $1"; return 0; fi; return 1; 
 
 echo "Installing ShipIt V4 gates v$VERSION → $REPO$([ "$DRY" = 1 ] && echo '  (dry-run)')"
 
-# 1. gate scripts → .shipit-gates/
-if ! act "copy gates/*.sh → .shipit-gates/"; then
+# 1. gate scripts → .shipit-gates/  (+ ui-smoke.mjs for the UI tier, + a default smoke.conf)
+if ! act "copy gates/*.{sh,mjs} → .shipit-gates/ (+ default smoke.conf)"; then
   mkdir -p "$REPO/.shipit-gates"
   cp "$PLUGIN_ROOT"/gates/*.sh "$REPO/.shipit-gates/"
+  cp "$PLUGIN_ROOT"/gates/*.mjs "$REPO/.shipit-gates/" 2>/dev/null || true   # ui-smoke.mjs (Playwright UI tier)
   chmod +x "$REPO/.shipit-gates/"*.sh
   printf 'shipit-v4 gates v%s\n' "$VERSION" > "$REPO/.shipit-gates/.version"
-  note ".shipit-gates/ ✓"
+  if [ ! -f "$REPO/.shipit-gates/smoke.conf" ]; then
+    cat > "$REPO/.shipit-gates/smoke.conf" <<'CONF'
+# ShipIt runtime smoke-test config — read by the runtime-smoke CI workflow + /ship.
+# After each deploy the gate hits your DEPLOYED artifact. Set your CRITICAL routes —
+# a SPA root often 200s while /api/* 504s (the exact FocusBoard failure a root check misses).
+SHIPIT_SMOKE_PATHS=/                 # comma-separated paths to curl (fail on 5xx/timeout)
+SHIPIT_SMOKE_UI=0                    # 1 → also load the page in Playwright and assert it renders
+SHIPIT_SMOKE_SELECTOR=body           # selector that must be present for the UI check
+SHIPIT_SMOKE_E2E_CMD=                # optional full E2E suite, e.g. "npx playwright test"
+CONF
+    note ".shipit-gates/smoke.conf written (defaults — edit your critical routes)"
+  else
+    note ".shipit-gates/smoke.conf present (kept)"
+  fi
+  note ".shipit-gates/ ✓ (gates + ui-smoke.mjs)"
 fi
 
 # 2. CI workflows (rewrite gates/ path → .shipit-gates/)
@@ -53,7 +72,7 @@ if ! act "install .github/workflows/{ci,docs-check}.yml"; then
   for t in "$PLUGIN_ROOT"/gates/ci-templates/*.yml; do
     sed 's#gates/#.shipit-gates/#g' "$t" > "$REPO/.github/workflows/$(basename "$t")"
   done
-  note ".github/workflows/ (ci.yml, docs-check.yml) ✓"
+  note ".github/workflows/ (ci, docs-check, independent-review, runtime-smoke) ✓"
 fi
 
 # 3. pre-push git hook (back up a pre-existing non-ShipIt hook)
