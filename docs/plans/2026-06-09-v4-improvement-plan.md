@@ -41,5 +41,24 @@ It's a signal, not a gate. The evidence: repeated false positives + a green pass
 - `runtime-smoke` UI tier: graceful-skip vs. hard-fail decision for opted-in repos (above).
 - Deploy-URL discovery is manual (P1).
 
+## Status (2026-06-09)
+- ✅ **P1 shipped** (PR #11): `runtime-smoke.yml` auto-fires on `deployment_status` (live URL via `environment_url`, zero config); `install-gates.sh` copies `ui-smoke.mjs` + seeds `.shipit-gates/smoke.conf`.
+- ✅ **P2 shipped** (PR #11): cross-model review is **fully advisory** (never blocks; `SHIPIT_REVIEW_STRICT` opt-in keeps teeth) + size-gated (`SHIPIT_REVIEW_MIN_LINES`, default 10). The strict-mode prose-grep bug was already fixed.
+- ⏭️ **P3 next** — spec below. **P4** still open (battle-test on 2–3 repos; the FocusBoard runtime-smoke wiring is the first real customer).
+
+## P3 — implementation spec (agreed: make the @agent summon fire by itself)
+**Decision:** the specialists already ARE `@agents` (`@architect`, `@designer`, `@reviewer` in `~/.claude/agents/`; ShipIt ships its own `reviewer`). So P3 is NOT a new skill and NOT a new agent — it's the missing half: a **nudge that summons the existing @agent at the right moment**, in the same family as `gates/docs-sync-reminder.sh` and `gates/retro-sweep-nudge.sh` (read those two first — they are the template).
+
+Build:
+1. **`gates/specialist-nudge.sh`** (NEW) — a commit-time `PreToolUse`(Bash) nudge, non-blocking (mirror `docs-sync-reminder.sh`'s structure + exit-0 behaviour). Inspect the staged diff:
+   - **Architectural surfaces** → nudge *"summon `@architect` before shipping"*: `**/migrations/**`, `*.sql`, schema/data-model files, `api/` boundary files, new dependencies added to `package.json`, new external integrations.
+   - **UI surfaces** → nudge *"summon `@designer`"*: `**/components/**`, `*.tsx`/`*.jsx`, `*.css`/Tailwind, pages/routes.
+   - One concise line per matched surface; never block.
+2. **Ship `agents/architect.md` + `agents/designer.md`** with the plugin (it already ships `reviewer.md`) — adapt from `~/.claude/agents/` so installed repos are self-contained and the nudge points at real agents.
+3. **Wire into `install-gates.sh`** — add the specialist-nudge to `.claude/settings.json` `PreToolUse` via the same idempotent jq-merge used for `docs-sync-reminder` (the `gates/*.sh` copy already ships the script).
+4. **`CLAUDE.md`** — a pattern entry: the trigger→`@agent` map + the nudge; note the architect's highest value was at PLAN time (summon before building, not just before shipping).
+
+Verify: stage a fake migration → nudge names `@architect`; stage a `*.tsx` → nudge names `@designer`; `install-gates.sh` into a scratch repo → `.claude/settings.json` carries the nudge; dogfood PR through V4's gates.
+
 ## What NOT to change
 The thesis is sound; don't re-add orchestration. The cheap gates, the ad-hoc specialists, and the retro loop are the keepers. The fix is **rebalancing**: less weight on the LLM review, more on runtime verification + the specialist pattern.
