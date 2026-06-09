@@ -18,8 +18,21 @@ Two capture paths, one shared core. **Model judges, code enforces.**
 | `scripts/route-learning.sh` | the placer — deterministic type×scope routing table; stamps new proposals `**Status:** pending` |
 | `scripts/proposed-learnings.sh` | lifecycle for `PROPOSED-LEARNINGS.md` — `--list`/`--apply <n>`/`--archive <n>` so proposals don't sit "awaiting review" forever (P5c) |
 | `scripts/collect-candidates.sh` | sweep prep — markers → transcript slices (no LLM) |
-| `hooks/retro-tripwire.sh` | the tripwire — free, every `Stop`, over-flags on purpose |
+| `hooks/retro-tripwire.sh` | the tripwire — free, every `Stop`, over-flags on purpose; **also emits loop-fired events (P5b)** |
+| `scripts/note-applied.sh` | record a fire for a JUDGMENT rule (the fallback signal; action rules fire for free) |
+| `scripts/learning-audit.sh` | read-time view of the loop-fired signal — `--fired`, `--dead-letters`, `--list` |
 | `commands/retro.md` | the `/retro` entry point (Path A and Path B) |
+
+### Did the learning actually fire? (P5b — the loop-fired verifier)
+
+V4's whole claim is *"a routed learning fires by itself next time"* — the exact thing V3 never **verified**. P5b gives it the first real feedback, **free, no LLM**:
+
+- **The signal is action-shape, not presence.** Rules are injected every session (SessionStart), so "in context" is always true — useless. Instead, `@retro`/`route-learning.sh` can tag a learning with an **`--action-match`** grep pattern (its distinctive *doing*, e.g. `git worktree add`) and a **`--surface-match`** (its *precondition*, e.g. a commit touching `api/`). The tripwire greps each turn's **tool stream** against them and appends `fire`/`opp` events — **with zero agent compliance**. This is the only signal that can prove a rule fired *unprompted*.
+- **Data shape (race-safe, honoring MANDATORY #6).** Registry `~/.claude/shipit-retro/learning-index.tsv` is **write-once** (`SIG⇥REPO⇥DATE⇥TYPE⇥ACTION_MATCH⇥SURFACE_MATCH`). Fires go to an **append-only** `learning-events.tsv` (single-line `O_APPEND`). Counts are **derived at read time** by `learning-audit.sh` (distinct sessions per SIG) — nothing is ever mutated in place, so concurrent sessions can't race it.
+- **Dead letters need a denominator.** `learning-audit.sh --dead-letters`: a **genuine miss** = surface arose ≥k sessions but FIRES=0 (re-route / sharpen / drop); **dormant** = surface never arose (legit waiting); **low-confidence** = a judgment rule (no patterns) unfired past the age window (eyeball it).
+- **Judgment rules** (no code-checkable action, e.g. "don't over-promise") can't be auto-detected — they use the **`scripts/note-applied.sh <slug>`** fallback (you log it when you apply it; the slug rides in the rule's `_(… learning:<slug>)_` tag). Honest limit: self-report under-counts.
+- **Two kinds of test.** The closed-loop route→apply→FIRES=1 is a **plumbing** test only. The *claim* ("it fires unprompted") is validated **observationally** — action-match fires accruing across real sessions with nobody calling `note-applied`.
+- **v2 (deferred):** a you-triggered, bounded **Haiku `--audit`** over only the judgment-rule dead letters (line-ranges only, cap, estimate-first) — the one paid piece, kept out of the autonomous detection path (cost rule #1).
 
 ## Gates (Phase 2)
 
