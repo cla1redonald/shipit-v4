@@ -53,9 +53,19 @@ echo "$([ "$UPDATE" = 1 ] && echo 'Updating' || echo 'Installing') ShipIt V4 gat
 # 1. gate scripts → .shipit-gates/  (+ ui-smoke.mjs for the UI tier, + a default smoke.conf)
 if ! act "copy gates/*.{sh,mjs} → .shipit-gates/ (+ default smoke.conf)"; then
   mkdir -p "$REPO/.shipit-gates"
-  cp "$PLUGIN_ROOT"/gates/*.sh "$REPO/.shipit-gates/"
-  cp "$PLUGIN_ROOT"/gates/*.mjs "$REPO/.shipit-gates/" 2>/dev/null || true   # ui-smoke.mjs (Playwright UI tier)
-  chmod +x "$REPO/.shipit-gates/"*.sh
+  if [ "$UPDATE" = 1 ]; then
+    # refresh ONLY the gate files the repo ALREADY has — never impose new ones, so a targeted
+    # install (a subset of gates) keeps its shape instead of growing the full set.
+    for f in "$REPO"/.shipit-gates/*.sh "$REPO"/.shipit-gates/*.mjs; do
+      [ -e "$f" ] || continue
+      src="$PLUGIN_ROOT/gates/$(basename "$f")"
+      [ -f "$src" ] && cp "$src" "$f"
+    done
+  else
+    cp "$PLUGIN_ROOT"/gates/*.sh "$REPO/.shipit-gates/"
+    cp "$PLUGIN_ROOT"/gates/*.mjs "$REPO/.shipit-gates/" 2>/dev/null || true   # ui-smoke.mjs (Playwright UI tier)
+  fi
+  chmod +x "$REPO/.shipit-gates/"*.sh 2>/dev/null || true
   printf 'shipit-v4 gates v%s\n' "$VERSION" > "$REPO/.shipit-gates/.version"
   if [ ! -f "$REPO/.shipit-gates/smoke.conf" ]; then
     cat > "$REPO/.shipit-gates/smoke.conf" <<'CONF'
