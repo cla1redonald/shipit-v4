@@ -41,6 +41,15 @@ V4 keeps and *hardens* exactly those two things:
 - `/orchestrate`, `shipit-parallel`, and the ~7 barely-used agents as a *roster*. For multi-agent builds, use native **dynamic workflows / agent teams**.
   - *(P3 amendment, Jun 2026)* The first wild run showed the **ad-hoc specialist summon** was the single highest-value output of the session, so `architect` + `designer` were re-shipped — not as a roster, but as on-demand agents fired by themselves via `gates/specialist-nudge.sh` (commit-time, non-blocking; nudges `@architect` on migrations/`*.sql`/`api/`/new deps, `@designer` on components/`*.tsx`/`*.css`). Still dropped: pm, devsecops, qa, strategist, orchestrator.
 
+## What shipped after the first wild run (the improvement plan)
+
+`docs/plans/2026-06-09-v4-improvement-plan.md` captured the honest post-mortem and a P1–P4 fix list. All four shipped:
+
+- **P1 — runtime verification** (the gap that mattered): `runtime-smoke.yml` auto-fires on `deployment_status`, hits the **live** artifact (HTTP non-5xx + Playwright render + optional E2E). Green build/tests/deploy/review could all be true on a dead deploy — only this catches it.
+- **P2 — demoted the cross-model review** to **advisory by default** (never blocks; `SHIPIT_REVIEW_STRICT` opt-in) + size-gated. It catches *diff-level* issues, not runtime correctness — it once passed green on the deploy that 504'd everything.
+- **P3 — promoted the specialist summon** to a self-firing `gates/specialist-nudge.sh` (see the amendment above).
+- **P4 — earned the confidence:** the gates were installed on **FocusBoard** (the first *real* customer, not a meta-PR), with `runtime-smoke` wired to `/api/capture`. **P1 proved out end-to-end** — both a manual live curl and `runtime-smoke` firing by itself in CI on the preview deploy. The install also surfaced a parallel-session git-collision lesson, now **MANDATORY.md rule #6** (a `git worktree` per concurrent session). `n` is now ≥1 real customer; the suite isn't "broadly proven" until 2–3 more.
+
 ## Reference implementation
 
 **ProveIt** (`~/code/proveit`) is the proving ground — it already runs the docs-sync gate, cost hooks, and dynamic workflows. V4 generalizes what proved out there.
