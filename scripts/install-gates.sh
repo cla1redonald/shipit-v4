@@ -42,7 +42,10 @@ for a in "$@"; do
 done
 [ -n "$REPO" ] || { echo "usage: install-gates.sh <repo> [--update] [--dry-run] [--protect]" >&2; exit 1; }
 REPO="$(cd "$REPO" 2>/dev/null && pwd)" || { echo "install-gates: no such dir '$REPO'" >&2; exit 1; }
-[ -d "$REPO/.git" ] || { echo "install-gates: '$REPO' is not a git repo" >&2; exit 1; }
+# Accept a normal clone (.git dir) OR a git WORKTREE (.git is a file). Worktrees are the
+# recommended pattern for concurrent sessions (MANDATORY #6), and `--update` is exactly the
+# kind of thing you run from one — so `[ -d .git ]` was too strict.
+git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "install-gates: '$REPO' is not a git repo or worktree" >&2; exit 1; }
 
 VERSION="$(jq -r '.version // "0.0.0"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null || echo 0.0.0)"
 note() { echo "  $*"; }
@@ -100,8 +103,11 @@ if ! act "install .github/workflows/{ci,docs-check}.yml"; then
   note ".github/workflows/ (ci, docs-check, independent-review, runtime-smoke) ✓"
 fi
 
-# 3. pre-push git hook (back up a pre-existing non-ShipIt hook)
-HOOK="$REPO/.git/hooks/pre-push"
+# 3. pre-push git hook (back up a pre-existing non-ShipIt hook). Resolve the hooks dir via
+#    git so it's correct for a worktree too (its .git is a file; hooks live in the COMMON dir).
+GITDIR="$(git -C "$REPO" rev-parse --git-common-dir 2>/dev/null || echo "$REPO/.git")"
+case "$GITDIR" in /*) ;; *) GITDIR="$REPO/$GITDIR" ;; esac
+HOOK="$GITDIR/hooks/pre-push"
 if ! act "install .git/hooks/pre-push"; then
   if [ -f "$HOOK" ] && ! grep -q 'shipit-gates' "$HOOK" 2>/dev/null; then
     cp "$HOOK" "$HOOK.pre-shipit.bak"
