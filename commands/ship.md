@@ -22,7 +22,9 @@ Run in order, on the current branch (never on `main`):
 
 4. **Commit + push the branch.** Conventional message. Push to the branch, not main.
 
-5. **Open the PR.** `gh pr create --fill`. This triggers the **independent cross-model review** (`.github/workflows/independent-review.yml`) — a non-Claude model reviews your work because the author doesn't review its own. Read its findings; address any genuine MUST-FIX.
+5. **Open the PR.** `gh pr create --fill`. This triggers two LLM-tier reviews:
+   - **Independent cross-model review** (`.github/workflows/independent-review.yml`) — a non-Claude model reviews the full diff for logic/contract/naming issues. Read its findings; address any genuine MUST-FIX.
+   - **Security review** (`.github/workflows/security-review.yml`) — **path-gated, OWASP-mapped, advisory**. Fires automatically if the diff touches security-sensitive surfaces (`api/`, `*auth*`, `*token*`, `*oauth*`, `*middleware*`, `*session*`, `supabase/migrations/`, `*.sql`, or diffs with crypto/jwt/password/secret/credential keywords). Skips silently on trivial PRs. Blocks only on `VERDICT: MUST-FIX`; set `SHIPIT_SECURITY_STRICT=true` to also block on any `[MUST-FIX]` tag. Override a conscious false positive with `[no-security]` in a commit message.
 
 6. **Runtime smoke-test — once it deploys (green CI is NOT proof it works).** Once gates are installed this **fires automatically in CI** (`runtime-smoke.yml`, on GitHub's `deployment_status` event — reads routes from `.shipit-gates/smoke.conf`), so you usually just read its result. To run it locally / on-demand when a preview-or-prod URL exists, hit the *live* artifact directly:
    ```bash

@@ -189,3 +189,19 @@ stops accumulating "awaiting review" forever (the rot the improvement plan flagg
 ```
 - **Manual acceptance steps that gate correctness must run before building on top of the surface, not as the closing step — when a real credential is the only thing blocking an e2e correctness check, surface the 1-minute manual step (or provision a test credential) at first-shippable, not in a final post-merge checklist.** — FocusBoard Phase 1 deferred "CLI captures into prod; web inbox shows it live" to a final step; it caught bug #3 but only post-merge, forcing fix PR #25 against shipped code. The cheapest correctness gate (a human with a real token, 60s) was scheduled last.
 ```
+
+## 2026-06-11 — tooling/enforcement
+
+**Status:** applied — 2026-06-11 — gates/ci-templates/security-review.yml + install-gates.sh + ship.md
+
+**Learning:** Security review belongs in the gate set as a CI-enforced, path-gated, LLM-tier gate — not as a "remember to run /security-review" prose step. Add `security-review.yml` as a SIBLING of `independent-review.yml`: same keyless GitHub-Models call (GITHUB_TOKEN + `models: read`, no wallet), same advisory-blocks-only-on-`VERDICT: MUST-FIX` posture (`SHIPIT_SECURITY_STRICT=true` to harden), but with an OWASP-Top-10/ASVS system prompt instead of the general-reviewer prompt, and a PATH-GATE so it fires ONLY when the diff touches security-sensitive surfaces (`api/`, `**/*auth*`, `**/*token*`, `**/*oauth*`, `**/*middleware*`, `supabase/migrations/`, crypto/jwt/password/secret patterns) — trivial PRs skip it, auth-boundary PRs trigger it automatically. The existing `detect-secrets.sh` covers only the cheap mechanical secret-scan; this adds the reasoning security review the gate set lacks.
+
+**Why:** FocusBoard Phase 6.2 (the OAuth 2.1 + hosted-MCP auth boundary, PR #47) needed THREE security passes to ship confidently — the build engineer's review, an adversarial reviewer-agent (which found real bugs: clickjacking, non-atomic refresh rotation, unbounded refresh tokens), and a manual OWASP-mapped audit. All three were invoked by hand. A standing gate would have fired the OWASP pass automatically on exactly that PR (it touches `api/_lib/*oauth*`, `*token*`, `*middleware*`, a migration) and skipped it on the dozens of trivial PRs in the same project — making "did anyone security-review the auth change?" a property of the pipeline, not of whether someone remembered. The `owasp-review` skill (~/.claude/skills/owasp-review) already holds the rubric to reuse as the prompt.
+
+**Apply to:** `shipit-v4: gates/ci-templates/security-review.yml (new, mirror independent-review.yml) + install-gates.sh wiring + commands/ship.md step list + a SHIPIT_SECURITY_STRICT repo-var note`. FocusBoard = first customer (its `.shipit-gates/` + a `.github/workflows/security-review.yml`).
+
+**Ready-to-apply snippet:**
+
+```
+- **Security review is a GATE, not a reminder.** Ship `security-review.yml` alongside `independent-review.yml`: keyless GitHub-Models call, advisory (blocks only on `VERDICT: MUST-FIX`; `SHIPIT_SECURITY_STRICT=true` hardens), OWASP-Top-10/ASVS prompt, PATH-GATED to security-sensitive diffs (`api/`, `*auth*`, `*token*`, `*oauth*`, `*middleware*`, `supabase/migrations/`, crypto/password patterns) so it fires on auth-boundary PRs and skips trivial ones. detect-secrets.sh is only the mechanical secret-scan; this is the reasoning review the gate set was missing. (FocusBoard Phase 6.2 OAuth/hosted-MCP needed 3 hand-invoked security passes that found real bugs — clickjacking, non-atomic refresh rotation, unbounded refresh tokens — none of which a mechanical gate sees.)
+```

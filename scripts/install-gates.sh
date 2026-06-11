@@ -11,7 +11,7 @@
 # Installs (copy + version stamp — stable if the plugin moves; drift is detectable):
 #   <repo>/.shipit-gates/         gate scripts (*.sh) + ui-smoke.mjs + .version + a default smoke.conf
 #   <repo>/.github/workflows/     ci.yml + docs-check.yml + independent-review.yml + runtime-smoke.yml
-#                                 (paths rewritten gates/ → .shipit-gates/)
+#                                 + security-review.yml (paths rewritten gates/ → .shipit-gates/)
 #   <repo>/.git/hooks/pre-push    → runs .shipit-gates/pre-push-checks.sh
 #   <repo>/.claude/settings.json  PreToolUse commit reminders — docs-sync + specialist-nudge
 #                                 (@architect/@designer summon) (jq-merged, idempotent)
@@ -100,7 +100,7 @@ if ! act "install .github/workflows/{ci,docs-check}.yml"; then
   for t in "$PLUGIN_ROOT"/gates/ci-templates/*.yml; do
     sed 's#gates/#.shipit-gates/#g' "$t" > "$REPO/.github/workflows/$(basename "$t")"
   done
-  note ".github/workflows/ (ci, docs-check, independent-review, runtime-smoke) ✓"
+  note ".github/workflows/ (ci, docs-check, independent-review, runtime-smoke, security-review) ✓"
 fi
 
 # 3. pre-push git hook (back up a pre-existing non-ShipIt hook). Resolve the hooks dir via

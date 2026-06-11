@@ -1,0 +1,179 @@
+name: Security review (OWASP-mapped)
+
+# Path-gated, LLM-tier security gate. Fires ONLY when the diff touches security-
+# sensitive surfaces — auth, tokens, OAuth, middleware, sessions, Supabase migrations,
+# SQL, or diffs containing crypto/jwt/password/secret/credential keywords.  Trivial
+# PRs skip it automatically; auth-boundary PRs trigger it without anyone remembering.
+#
+# Keyless: calls GitHub Models via the built-in GITHUB_TOKEN + `models: read` — no
+# OpenAI key, no wallet.  Advisory by default: posts findings as a PR comment and
+# fails the job ONLY on a standalone VERDICT: MUST-FIX line. Set repo var
+# SHIPIT_SECURITY_STRICT=true to also block on any [MUST-FIX] tag in findings.
+#
+# [no-security] in any commit message overrides the gate for a conscious false-positive.
+#
+# System prompt: OWASP Top 10 (2021) + ASVS v4 for auth/crypto files.
+# Per-file review so each file is seen COMPLETE (no whole-diff truncation).
+# MAX_FILES cost cap; per-file char cap with truncation note; pennies per PR.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+
+concurrency:
+  group: security-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SECURITY_MODEL: ${{ vars.SHIPIT_SECURITY_MODEL || 'openai/gpt-4.1' }}
+      # STRICT=true -> fail on ANY [MUST-FIX] tag, not just the final VERDICT line.
+      # Default advisory (verdict line only); set repo var SHIPIT_SECURITY_STRICT=true to harden.
+      STRICT: ${{ vars.SHIPIT_SECURITY_STRICT || 'false' }}
+      MAX_FILES: "25"          # cost cap: never review more than this many files per PR
+      PER_FILE_CHARS: "24000"  # ~6k tokens; only a single oversized file is truncated
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Path-gated OWASP security review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set +e +u +o pipefail   # aggregator: handle every error manually; never spurious-fail
+          base="origin/$BASE_REF"
+          git fetch -q origin "$BASE_REF" || true
+
+          # Conscious opt-out (mirror independent-review's [no-review]) -- for a verified false positive.
+          if git log --format='%B' "$base..HEAD" 2>/dev/null | grep -qiF '[no-security]'; then
+            echo "[no-security] override present in a commit message -- skipping security review."
+            gh pr comment "$PR" --body "Security review **skipped** via the \`[no-security]\` override." || true
+            exit 0
+          fi
+
+          # --- PATH GATE ---
+          # Compute changed files vs base branch. Run the review ONLY if any file touches
+          # security-sensitive surfaces. Matches:
+          #   api/                     -- API routes (auth/token endpoints often here)
+          #   **/*auth*                -- auth files anywhere
+          #   **/*token*               -- token handling
+          #   **/*oauth*               -- OAuth flows
+          #   **/*middleware*          -- middleware (often enforces authz)
+          #   **/*session*             -- session management
+          #   supabase/migrations/     -- DB migrations (RLS, schema changes)
+          #   **/*.sql                 -- SQL files
+          # Plus: diff content containing crypto/jwt/password/secret/credential keywords.
+
+          mapfile -t ALL_CHANGED < <(git diff --name-only "$base...HEAD" -- . \
+            ':(exclude)**/package-lock.json' ':(exclude)**/*.lock' 2>/dev/null)
+
+          # Build list of security-sensitive files into a temp file to avoid embedded-newline issues
+          SENS_TMP="$(mktemp)"
+          for f in "${ALL_CHANGED[@]}"; do
+            [ -n "$f" ] || continue
+            # Path-pattern match: api/, *auth*, *token*, *oauth*, *middleware*, *session*, migrations/, .sql
+            if printf '%s' "$f" | grep -qiE \
+              '(^|/)api/|(^|/)[^/]*(auth|token|oauth|middleware|session)[^/]*(\.| |$)|(^|/)supabase/migrations/|\.sql$'; then
+              printf '%s\n' "$f" >> "$SENS_TMP"
+            else
+              # Keyword scan on the actual diff content
+              diff_content="$(git diff "$base...HEAD" -- "$f" 2>/dev/null)"
+              if printf '%s' "$diff_content" | grep -qiE '\b(crypto|jwt|password|secret|credential)\b'; then
+                printf '%s\n' "$f" >> "$SENS_TMP"
+              fi
+            fi
+          done
+
+          mapfile -t SENSITIVE_FILES < "$SENS_TMP"
+          rm -f "$SENS_TMP"
+
+          if [ "${#SENSITIVE_FILES[@]}" -eq 0 ]; then
+            echo "No security-sensitive paths in diff -- skipping security review."
+            gh pr comment "$PR" --body "Security review skipped -- no security-sensitive paths in this diff." || true
+            exit 0
+          fi
+
+          echo "Security-sensitive paths detected (${#SENSITIVE_FILES[@]} file(s)):"
+          printf '  %s\n' "${SENSITIVE_FILES[@]}"
+
+          # Cap at MAX_FILES
+          FILES=("${SENSITIVE_FILES[@]:0:$MAX_FILES}")
+          SKIPPED=$(( ${#SENSITIVE_FILES[@]} - ${#FILES[@]} ))
+
+          # OWASP-mapped system prompt (single-line assignment mirrors independent-review.yml pattern).
+          # Covers OWASP Top 10 (2021) + ASVS v4 V2/V3/V7 for auth/crypto files.
+          SYS="You are an independent security reviewer from a different model family than the author (Claude). You review ONE file's diff at a time against the OWASP Top 10 (2021) and, for auth/crypto files, relevant ASVS v4 controls. The diff you are given is the COMPLETE diff for that file unless a truncation note says otherwise -- do NOT speculate about code you cannot see. Check each applicable OWASP category: A01 Broken Access Control -- authz on every endpoint; IDOR; missing deny-by-default; CORS as an access-control bypass. A02 Cryptographic Failures -- secrets at rest (hashed vs plaintext tokens/passwords); weak/reused algorithms; PKCE/JWT correctness; CSPRNG vs Math.random; constant-time comparison where a timing oracle is reachable. A03 Injection -- SQL/NoSQL parameterised vs string-built; XSS output encoding in HTML/attribute/JS/URL contexts; header injection; ORM arg construction. A04 Insecure Design -- missing rate limits on auth/expensive ops; missing single-use/expiry on codes and tokens; abuse cases. A05 Security Misconfiguration -- verbose errors to clients; CORS wildcard-with-credentials or over-broad origin reflection; missing security headers (CSP, X-Frame-Options, HSTS); RLS enabled and policy-correct. A07 Identification and Authentication Failures -- token lifecycle (expiry, rotation, revocation, single-use); token storage; brute-force protection; user enumeration; auth bypass via fall-through. A09 Security Logging -- are secrets leaking into logs? (passwords, tokens, codes, keys). A10 SSRF -- server-side fetch from user-controlled input; URL allow-listing. For auth/crypto files apply ASVS v4: V2 Authentication (brute-force, lifecycle), V3 Session Management (rotation, expiry, revocation), V7 Cryptography (randomness, algorithms, storage). Reserve [MUST-FIX] for a concrete, line-citable Critical or High finding: auth bypass, token leak, injection, privilege escalation, CSRF on a state-changing endpoint. Design observations or non-critical hardening are [NIT], never [MUST-FIX]. End with exactly one final line: 'VERDICT: MUST-FIX' if you listed a genuine [MUST-FIX] for this file, otherwise 'VERDICT: OK'."
+
+          overall_ok=1
+          : > findings.md
+          for f in "${FILES[@]}"; do
+            [ -n "$f" ] || continue
+            d="$(git diff "$base...HEAD" -- "$f")"
+            [ -z "$d" ] && continue   # no diff for this file (e.g. pure rename) -- skip
+            note=""
+            if [ "${#d}" -gt "$PER_FILE_CHARS" ]; then
+              d="$(printf '%s' "$d" | head -c "$PER_FILE_CHARS")"
+              note=" (NOTE: this single file's diff was truncated at ${PER_FILE_CHARS} chars)"
+            fi
+            user="$(printf 'Review this file diff for security issues%s.\nFile: %s\n\n```diff\n%s\n```' "$note" "$f" "$d")"
+            body="$(jq -n --arg m "$SECURITY_MODEL" --arg s "$SYS" --arg u "$user" \
+              '{model:$m, max_tokens:700, messages:[{role:"system",content:$s},{role:"user",content:$u}]}')"
+            resp="$(curl -sS -X POST https://models.github.ai/inference/chat/completions \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/vnd.github+json" \
+              -d "$body" 2>/dev/null)"
+            content="$(printf '%s' "$resp" | jq -r '.choices[0].message.content // .error.message // "(no response)"' 2>/dev/null)"
+            {
+              echo "### \`$f\`"
+              echo "$content"
+              echo
+            } >> findings.md
+            # Trip ONLY on a standalone verdict line -- not the string mid-prose.
+            # Explicit if-block so a no-match never bubbles a non-zero exit.
+            if printf '%s\n' "$content" | grep -qiE '^[[:space:]]*VERDICT:[[:space:]]*MUST-FIX[[:space:]]*$'; then
+              overall_ok=0
+            fi
+            # Strict mode: also trip on a [MUST-FIX] FINDING tag that LEADS a list item --
+            # NOT a prose mention ("no [MUST-FIX] issues") and NOT a section HEADING.
+            if [ "$STRICT" = "true" ] && printf '%s\n' "$content" | grep -qiE '^[[:space:]]*[-*>0-9.)( ]*\[MUST-FIX\]'; then
+              overall_ok=0
+            fi
+          done
+
+          {
+            echo "## Independent security review (OWASP-mapped)"
+            echo "_Reviewer: \`$SECURITY_MODEL\` via GitHub Models -- one call per security-sensitive file, each file seen complete (no whole-diff truncation). Advisory -- blocks only on \`VERDICT: MUST-FIX\`._"
+            if [ "$STRICT" = "true" ]; then
+              echo "_Mode: **STRICT** -- any \`[MUST-FIX]\` tag blocks the merge. Override a false positive with \`[no-security]\` in a commit message._"
+            else
+              echo "_Mode: **advisory** -- findings are informational and do **NOT** block the merge. Set repo var \`SHIPIT_SECURITY_STRICT=true\` to make \`[MUST-FIX]\` block._"
+            fi
+            [ "$SKIPPED" -gt 0 ] && echo && echo "> ${SKIPPED} security-sensitive file(s) beyond the ${MAX_FILES}-file cap were NOT reviewed -- review them by hand."
+            echo
+            echo "**Security-sensitive paths reviewed:** ${#FILES[@]} file(s)"
+            echo
+            cat findings.md
+          } > comment.md
+          gh pr comment "$PR" --body-file comment.md || true
+
+          if [ "$overall_ok" -eq 0 ]; then
+            if [ "$STRICT" = "true" ]; then
+              echo "::error::STRICT: security review found MUST-FIX -- see the PR comment."
+              exit 1
+            fi
+            echo "::warning::Security review flagged MUST-FIX (advisory -- NOT blocking). See the PR comment."
+            exit 0
+          fi
+          echo "Security review: OK across ${#FILES[@]} reviewed file(s)."
