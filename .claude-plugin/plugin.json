@@ -1,7 +1,7 @@
 {
   "name": "shipit",
   "description": "The native-primitives era of ShipIt. Sheds the orchestration framework (commoditized by dynamic workflows + agent teams) and hardens the two durable things — gate discipline and a learning loop — as hooks + CI so they actually fire. Ships: the retro learning loop, a full gate set (no-push-to-main, secrets, docs-sync, test/build, an independent cross-model review), and composable on-demand agents (reviewer, docs, engineer, researcher, architect, designer) summoned by themselves via a specialist-nudge, + skills (/spec, /gameplan, /prd-review, /code-review, /tdd-build, /ship).",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "author": { "name": "Claire Donald" },
   "license": "MIT",
   "keywords": ["retro", "learning-loop", "hooks", "gates", "code-review", "memory", "self-improving"],

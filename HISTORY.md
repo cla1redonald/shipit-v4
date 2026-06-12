@@ -8,6 +8,10 @@ ShipIt has tracked Claude's maturation. Each version is kept where it was built,
 | **v3** | `~/code/shipit-v3` (v3.1.0) | Apr 2026 | The **orchestration era**: 13 agents, `/orchestrate`, a hand-rolled two-tier memory/retro system. The canonical "current" before v4, and the porting source. |
 | **v4** | `~/code/shipit-v4` (this, v4.0.0) | Jun 2026 | The **native-primitives era**. The platform now ships dynamic workflows, agent teams, native memory, hooks, and CI. The half of ShipIt that *was* infrastructure is redundant; the half that's **discipline + learning** is the durable value — rebuilt so it actually fires. |
 
+## Gate additions
+
+- **2026-06-12 — `security-review` gate (S7).** An OWASP-Top-10/ASVS-mapped, path-gated, LLM-tier CI gate (sibling of `independent-review`): keyless GitHub-Models call, fires only when a diff touches security-sensitive surfaces (`api/`, `*auth*`/`*token*`/`*oauth*`/`*middleware*`/`*session*`, `supabase/migrations/`, `.sql`, crypto/password keywords), advisory (blocks only on `VERDICT: MUST-FIX`; `SHIPIT_SECURITY_STRICT` hardens). Security review becomes a property of the pipeline, not of whether someone remembered to run it. (PROPOSED-LEARNINGS #12; born from FocusBoard's OAuth/hosted-MCP auth boundary needing three hand-invoked security passes.)
+
 ## Provenance — how I got here
 
 I didn't set out to rebuild ShipIt. I set out to build **ProveIt** — a small product-validation tool — and in doing it I kept reaching for three things the platform now gives you for free: a **docs-sync gate** (a cheap bash + CI check, no LLM), **cost hooks** that make me estimate spend before a run, and **dynamic workflows** where code does the coordination and the model only does the judgment. None of that needed a framework. It just needed a few hooks and a script.
