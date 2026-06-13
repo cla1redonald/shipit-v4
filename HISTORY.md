@@ -68,6 +68,16 @@ as a sibling `docs-coverage` job in `ci-templates/docs-check.yml`; fresh install
 it via `install-gates.sh`. FocusBoard = first customer. See PROPOSED-LEARNINGS.md
 2026-06-13.
 
+**Follow-up (same day): FUNCS manifest.** The first version only knew `ROUTE_SCOPES`
+routes + migrations, so standalone serverless functions (Vercel `export default`
+handlers outside the router table) stayed invisible — FocusBoard's 5 `api/ai/*`
+endpoints were undocumented and the gate didn't notice. Added a FUNCS manifest that
+derives `/api/<path>` from each function file (excl. `_lib`/`index`/tests) and requires
+it in `docs/API.md` (config: `SHIPIT_FUNCS_DIR`/`SHIPIT_FUNCS_DOC`). The cross-model
+`review` gate then caught two real fragilities in that addition (a leading-`./` path
+bug and a comment/code mismatch on the router exclusion) — both fixed, a tidy
+demonstration of the gates catching each other.
+
 ## Reference implementation
 
 **ProveIt** (`~/code/proveit`) is the proving ground — it already runs the docs-sync gate, cost hooks, and dynamic workflows. V4 generalizes what proved out there.
