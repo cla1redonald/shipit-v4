@@ -20,5 +20,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # need history to diff against the base branch
-      - name: Check docs kept in sync with code
+      - name: Check docs kept in sync with code (touch gate)
         run: bash gates/check-docs-sync.sh "origin/${{ github.base_ref }}"
+
+  # CONTENT-coverage gate (companion to the touch gate above). The touch gate only
+  # asks "did SOME doc change?" — editing an unrelated doc satisfies it while
+  # docs/API.md or docs/SUPABASE.md silently go stale. This one asserts those docs
+  # MENTION every API route (ROUTE_SCOPES) and every migration table/function, and
+  # auto-skips on repos without those source paths. (FocusBoard Phase 3–6 drift.)
+  docs-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check docs cover every route + table
+        env:
+          SHIPIT_DOCS_COVERAGE_BASE: origin/${{ github.base_ref }}
+        run: bash gates/check-docs-coverage.sh

@@ -9,7 +9,8 @@
 #   --protect   also enable branch protection on main via gh (needs repo admin)
 #
 # Installs (copy + version stamp — stable if the plugin moves; drift is detectable):
-#   <repo>/.shipit-gates/         gate scripts (*.sh) + ui-smoke.mjs + .version + a default smoke.conf
+#   <repo>/.shipit-gates/         gate scripts (*.sh, incl. check-docs-coverage.sh — the
+#                                 content-coverage docs gate) + ui-smoke.mjs + .version + smoke.conf
 #   <repo>/.github/workflows/     ci.yml + docs-check.yml + independent-review.yml + runtime-smoke.yml
 #                                 + security-review.yml (paths rewritten gates/ → .shipit-gates/)
 #   <repo>/.git/hooks/pre-push    → runs .shipit-gates/pre-push-checks.sh
@@ -89,8 +90,14 @@ fi
 
 # --update stops here: scripts refreshed, everything else (CI workflows, pre-push hook,
 # .claude/settings.json, smoke.conf, branch protection) left exactly as the repo has it.
+# NOTE: --update only refreshes gate SCRIPTS the repo already has — it does NOT add a
+# brand-new gate's CI job. A new gate (e.g. check-docs-coverage.sh + its docs-check.yml
+# job) reaches an EXISTING repo only by re-running a FULL install (which overwrites
+# .github/workflows/docs-check.yml) or by hand-adding the job. Fresh installs get it
+# automatically (cp gates/*.sh + ci-templates/*.yml below).
 if [ "$UPDATE" = 1 ]; then
   echo "Done (update). Refreshed .shipit-gates/ scripts to v$VERSION — CI / settings / smoke.conf untouched. Review + commit in $REPO."
+  echo "  (A NEW gate's CI job is not added by --update; re-run a full install or add the job by hand.)"
   exit 0
 fi
 
