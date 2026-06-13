@@ -54,6 +54,20 @@ V4 keeps and *hardens* exactly those two things:
 - **P3 — promoted the specialist summon** to a self-firing `gates/specialist-nudge.sh` (see the amendment above).
 - **P4 — earned the confidence:** the gates were installed on **FocusBoard** (the first *real* customer, not a meta-PR), with `runtime-smoke` wired to `/api/capture`. **P1 proved out end-to-end** — both a manual live curl and `runtime-smoke` firing by itself in CI on the preview deploy. The install also surfaced a parallel-session git-collision lesson, now **MANDATORY.md rule #6** (a `git worktree` per concurrent session). `n` is now ≥1 real customer; the suite isn't "broadly proven" until 2–3 more.
 
+## 2026-06-13 — docs-coverage gate (the docs-drift fix)
+
+`gates/check-docs-coverage.sh` — a CONTENT-coverage companion to the existing
+`check-docs-sync.sh` TOUCH gate. The touch gate only asks "did SOME doc change?",
+which any unrelated doc edit satisfies — so FocusBoard shipped Phases 3–6 with
+`docs/API.md` covering ~4 of ~35 routes and `docs/SUPABASE.md` ~2 of ~10 schema
+objects, every PR green. The new gate extracts the route manifest from `ROUTE_SCOPES`
+and table/function names from `supabase/migrations/*.sql` and asserts each appears in
+its designated doc, failing with the exact missing names (pure grep/sed, no token
+cost, config-driven, `[no-docs]` override, auto-skips repos without those paths). Runs
+as a sibling `docs-coverage` job in `ci-templates/docs-check.yml`; fresh installs get
+it via `install-gates.sh`. FocusBoard = first customer. See PROPOSED-LEARNINGS.md
+2026-06-13.
+
 ## Reference implementation
 
 **ProveIt** (`~/code/proveit`) is the proving ground — it already runs the docs-sync gate, cost hooks, and dynamic workflows. V4 generalizes what proved out there.
