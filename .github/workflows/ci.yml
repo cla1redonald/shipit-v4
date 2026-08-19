@@ -16,6 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Language-agnostic, so it runs before the package.json gate below.
+      # Gate S4's plan specced "PostToolUse warn + pre-push/CI scan"; this is
+      # the CI half, with the criterion "committed key -> CI red".
+      - name: Secret scan
+        run: |
+          bash gates/detect-secrets.test.sh
+          bash gates/detect-secrets.sh --scan .
+
       - name: Detect package.json
         id: pkg
         run: |

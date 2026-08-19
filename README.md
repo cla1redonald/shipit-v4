@@ -20,7 +20,7 @@ Automated discipline that fires even when you don't invoke `/ship`:
 |---|---|
 | `no-push-to-main.sh` | Global PreToolUse — blocks pushes to main |
 | `block-sensitive-paths.sh` | Global PreToolUse — blocks writes to `~/.ssh`, `*.pem`, etc. |
-| `detect-secrets.sh` | Global PostToolUse — warns on secrets |
+| `detect-secrets.sh` | Global PostToolUse warn, plus `--scan` for pre-push/CI (red on a committed key) |
 | `check-docs-sync.sh` | Per-repo CI + commit reminder; `[no-docs]` escape |
 | `pre-push-checks.sh` | Per-repo `pre-push` hook + CI; `[no-test]` escape |
 | `runtime-smoke-test.sh` | Auto-fires on `deployment_status` — hits the live artifact (HTTP + Playwright + optional E2E) |
