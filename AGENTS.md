@@ -44,7 +44,7 @@ Gate discipline, converted from v3 prose into mechanism. **Two delivery paths:**
 |---|---|---|
 | `no-push-to-main.sh` | global PreToolUse(Bash) — blocks pushes to main | ✅ |
 | `block-sensitive-paths.sh` | global PreToolUse(Write/Edit) — blocks `~/.ssh`, `*.pem`, … | ✅ |
-| `detect-secrets.sh` | global PostToolUse(Write/Edit) — warns on secrets | ✅ |
+| `detect-secrets.sh` | global PostToolUse(Write/Edit) warn, plus `--scan` in CI | ✅ |
 | `check-docs-sync.sh` (+ `ci-templates/docs-check.yml`) | per-repo CI + commit reminder; `[no-docs]`. CODE_RE covers app layouts (`src/ app/ web/ api/ …`) + ShipIt's own — not just ShipIt's, which made it a silent no-op on app repos | ✅ |
 | `pre-push-checks.sh` (+ `ci-templates/ci.yml`) | per-repo `pre-push` hook + CI; `[no-test]` | ✅ |
 | `.github/workflows/independent-review.yml` | required CI check — a **non-Claude** model reviews every PR (author ≠ reviewer), keyless via **GitHub Models** | ✅ |
